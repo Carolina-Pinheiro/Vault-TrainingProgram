@@ -10,6 +10,7 @@ contract Vault{
 
     address public owner;
     uint256 depositID = 0;
+    uint256 REWARDS_PER_SECOND = 317; 
 
     //
     struct Deposit{
@@ -20,9 +21,10 @@ contract Vault{
         address owner; // debate if necessary
     }
 
-    mapping(address => Deposit[]) public depositList; // depositsList[owner] = [Deposit deposit1, Deposit, deposit2, ... ]
+    Deposit[] public depositList; // depositsList[owner] = [Deposit deposit1, Deposit, deposit2, ... ]
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards 
-
+    mapping(address => uint256[]) public ownersDepositId; // ids of the owners    
+    
     // There are two situations when a depositShare updates - new deposit (nd) or lock up ends (le)
     // The linked list refers to the depositSharesUpdates, it is organized from past to future (past refers to the beggining of the list, future to the end)
     // TODO: implement linked list
@@ -63,8 +65,9 @@ contract Vault{
                                     id: depositID,
                                     owner: msg.sender
                                     });
+        depositList.push(newDeposit);
+        ownersDepositId[msg.sender].push(depositID);
         depositID ++;
-        depositList[msg.sender].push(newDeposit);
     }
 
 
@@ -98,7 +101,6 @@ contract Vault{
 
 
     /// @notice Gets the rewards multiplier according to the lockUpPeriod
-    /// @dev still in development
     /// @param lockUpPeriod: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
     /// @return rewardsMultiplier: the rewards multiplier according to the locking period
     function getRewardsMultiplier(uint256 lockUpPeriod) internal pure returns(uint256){
