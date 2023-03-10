@@ -13,6 +13,7 @@ contract Vault {
 
     uint256 depositID = 0;
     mapping(uint256 => uint256) private lockUpPeriod; // lockUpPeriod -> rewardsMultiplier
+    uint256 REWARDS_PER_SECOND = 317; 
 
     //
     struct Deposit {
@@ -23,9 +24,10 @@ contract Vault {
         address owner; // debate if necessary
     }
 
-    mapping(address => Deposit[]) public depositList; // depositsList[owner] = [Deposit deposit1, Deposit, deposit2, ... ]
-    mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
-
+    Deposit[] public depositList; // depositsList[owner] = [Deposit deposit1, Deposit, deposit2, ... ]
+    mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards 
+    mapping(address => uint256[]) public ownersDepositId; // ids of the owners    
+    
     // There are two situations when a depositShare updates - new deposit (nd) or lock up ends (le)
     // The linked list refers to the depositSharesUpdates, it is organized from past to future (past refers to the beggining of the list, future to the end)
     // TODO: implement linked list
@@ -69,8 +71,9 @@ contract Vault {
             id: depositID,
             owner: msg.sender
         });
-        depositID++;
         depositList[msg.sender].push(newDeposit_);
+        ownersDepositId[msg.sender].push(depositID);
+        depositID++;
     }
 
     /// @notice  Function where the user withdraws the deposits
