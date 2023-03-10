@@ -21,23 +21,16 @@ contract VaultTest is Test, Vault {
     }
 
     function testRewardsMultiplier() external {
-        vm.startPrank(barbie);
-
         // Test the 4 tiers
-        vault.deposit(1, 6);
-        vault.deposit(1, 1);
-        vault.deposit(1, 2);
-        vault.deposit(1, 4);
-
-        (, uint256 rewardsMultiplier6Months,,,) = vault.depositList(barbie, 0);
-        (, uint256 rewardsMultiplier1Year,,,) = vault.depositList(barbie, 1);
-        (, uint256 rewardsMultiplier2Years,,,) = vault.depositList(barbie, 2);
-        (, uint256 rewardsMultiplier4Years,,,) = vault.depositList(barbie, 3);
-
-        assertEq(rewardsMultiplier6Months, 1); // 6 months
-        assertEq(rewardsMultiplier1Year, 2); // 1 year
-        assertEq(rewardsMultiplier2Years, 4); // 2 years
-        assertEq(rewardsMultiplier4Years, 8); // 4 years
+        uint8[4] memory rewardsTiers = [6, 1, 2, 4]; // 6 months, 1 year, 2 years, 4 years
+        uint8[4] memory expectedRewardsMultiplier = [1, 2, 4, 8];
+        uint256 rewardsMultiplier;
+        vm.startPrank(barbie);
+        for (uint256 i = 0; i < 4; i++) {
+            vault.deposit(1, rewardsTiers[i]);
+            (, rewardsMultiplier,,,) = vault.depositList(barbie, i);
+            assertEq(rewardsMultiplier, expectedRewardsMultiplier[i]);
+        }
 
         //Test with an incorrect lock up period
         vm.expectRevert();
