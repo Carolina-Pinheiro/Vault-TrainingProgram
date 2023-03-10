@@ -6,3 +6,5 @@
 	path = lib/openzeppelin-contracts
 	url = https://github.com/openzeppelin/openzeppelin-contracts
 	branch = master
+[submodule "lib/solidity-examples"]
+	path = lib/solidity-examples
