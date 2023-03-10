@@ -33,11 +33,12 @@ contract VaultTest is Test, Vault {
         vault.deposit(1,1);
         vault.deposit(1,2);
         vault.deposit(1,4);
+        vm.stopPrank();
 
-        ( ,uint256 rewardsMultiplier6Months, , ,) = vault.depositList(barbie,0);
-        ( ,uint256 rewardsMultiplier1Year, , ,) = vault.depositList(barbie,1);
-        ( ,uint256 rewardsMultiplier2Years, , ,) = vault.depositList(barbie,2);
-        ( ,uint256 rewardsMultiplier4Years, , ,) = vault.depositList(barbie,3);
+        (, uint256 rewardsMultiplier6Months,,,) = vault.depositList(vault.ownersDepositId(barbie, 0));
+        (, uint256 rewardsMultiplier1Year,,,) = vault.depositList(vault.ownersDepositId(barbie, 1));
+        (, uint256 rewardsMultiplier2Years,,,) = vault.depositList(vault.ownersDepositId(barbie, 2));
+        (, uint256 rewardsMultiplier4Years,,,) = vault.depositList(vault.ownersDepositId(barbie, 3));
 
         assertEq(rewardsMultiplier6Months, 1);  // 6 months
         assertEq(rewardsMultiplier1Year, 2);  // 1 year
@@ -45,9 +46,11 @@ contract VaultTest is Test, Vault {
         assertEq(rewardsMultiplier4Years, 8);  // 4 years
 
         //Test with an incorrect lock up period
-        vm.expectRevert("Lock up period chosen is not possible, choose between 6 (6 months), 1 (1 year), 2 (2 yeats) or 4 (4 years)");
-        vault.deposit(1,3);
-
+        vm.startPrank(barbie);
+        vm.expectRevert(
+            "Lock up period chosen is not possible, choose between 6 (6 months), 1 (1 year), 2 (2 yeats) or 4 (4 years)"
+        );
+        vault.deposit(1, 3);
         vm.stopPrank();
     }
 
