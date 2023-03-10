@@ -1,15 +1,10 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-contract Token{
+contract Token {
+    constructor() { }
 
-    address public owner;
+    receive() external payable { }
 
-    constructor() {
-        owner = msg.sender;
-    }
-
-    receive() external payable {}
-
-    fallback() external {}
+    fallback() external { }
 }

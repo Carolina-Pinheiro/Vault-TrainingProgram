@@ -7,7 +7,5 @@ import { Token } from "src/Token.sol";
 contract TokenTest is Test {
     Token token;
 
-    function setUp() external{
-    }
-
+    function setUp() external { }
 }
