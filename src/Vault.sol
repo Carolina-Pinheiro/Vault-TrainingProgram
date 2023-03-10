@@ -25,9 +25,9 @@ contract Vault {
     }
 
     Deposit[] public depositList; // depositsList[owner] = [Deposit deposit1, Deposit, deposit2, ... ]
-    mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards 
-    mapping(address => uint256[]) public ownersDepositId; // ids of the owners    
-    
+    mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
+    mapping(address => uint256[]) public ownersDepositId; // ids of the owners
+
     // There are two situations when a depositShare updates - new deposit (nd) or lock up ends (le)
     // The linked list refers to the depositSharesUpdates, it is organized from past to future (past refers to the beggining of the list, future to the end)
     // TODO: implement linked list
