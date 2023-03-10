@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-contract Vault {
+import { Initializable } from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
+import { OwnableUpgradeable } from "@openzeppelin-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import { UUPSUpgradeable } from "@openzeppelin-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+
+contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     //-----------------------------------------------------------------------
     //---------------------------ERRORS-& EVENTS-----------------------------
     //-----------------------------------------------------------------------
@@ -37,7 +41,7 @@ contract Vault {
         uint256 shareToReduce; // + for nd, - for le
     }
 
-    constructor() {
+    constructor()  initializer {
         // Set lock up period
         lockUpPeriod[6] = 1;
         lockUpPeriod[1] = 2;
@@ -52,6 +56,13 @@ contract Vault {
     //-----------------------------------------------------------------------
     //------------------------------EXTERNAL---------------------------------
     //-----------------------------------------------------------------------
+
+    /// @notice Set-up for the contract to be upgradable in the future
+    function initialize() external initializer {
+        // Initialize inheritance chain
+        __Ownable_init();
+        __UUPSUpgradeable_init();
+    }
 
     /// @notice Function where the user deposits the liquidity, chooses the lock-up period and receives LP tokens
     /// @dev still in development
@@ -123,4 +134,7 @@ contract Vault {
 
         return 0;
     }
+
+    // By marking this internal function with `onlyOwner`, we only allow the owner account to authorize an upgrade
+    function _authorizeUpgrade(address newImplementation_) internal override onlyOwner { }
 }

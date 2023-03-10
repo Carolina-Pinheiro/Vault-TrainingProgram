@@ -6,16 +6,20 @@ import { Vault } from "src/Vault.sol";
 
 contract VaultTest is Test, Vault {
     Vault vault;
-    address public ownerVault = vm.addr(10);
-    address public barbie = vm.addr(11);
+    address public ownerVault = vm.addr(11);
+    address public lucy = vm.addr(12);
+    address public phoebe = vm.addr(13);
+    address public julien = vm.addr(14);
 
     event LogAddress(address);
 
     function setUp() external {
         // Set-up the vault contract
         vm.label(ownerVault, "OwnerVault");
-        vm.label(barbie, "Barbie");
-        vm.prank(ownerVault);
+        vm.label(lucy, "Lucy");
+        vm.label(phoebe, "Phoebe");
+        vm.label(julien, "Julien");
+        vm.startPrank(ownerVault);
         vault = new Vault();
     }
 
@@ -36,5 +40,9 @@ contract VaultTest is Test, Vault {
         vault.deposit(1, 3);
 
         vm.stopPrank();
+    }
+
+    function testProxy() external {
+        //TODO
     }
 }
