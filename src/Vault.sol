@@ -11,7 +11,6 @@ contract Vault {
     //------------------------------VARIABLES--------------------------------
     //-----------------------------------------------------------------------
 
-    address public owner;
     uint256 depositID = 0;
     mapping(uint256 => uint256) private lockUpPeriod; // lockUpPeriod -> rewardsMultiplier
 
@@ -37,7 +36,6 @@ contract Vault {
     }
 
     constructor() {
-        owner = msg.sender;
         // Set lock up period
         lockUpPeriod[6] = 1;
         lockUpPeriod[1] = 2;
