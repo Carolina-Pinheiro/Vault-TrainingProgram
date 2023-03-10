@@ -6,8 +6,8 @@ import { Vault } from "src/Vault.sol";
 
 contract VaultTest is Test, Vault {
     Vault vault;
-    address public ownerVault = address(9_032_023);
-    address public barbie = address(2005);
+    address public ownerVault = vm.addr(10);
+    address public barbie = vm.addr(11);
 
     event LogAddress(address);
 
@@ -15,9 +15,8 @@ contract VaultTest is Test, Vault {
         // Set-up the vault contract
         vm.label(ownerVault, "OwnerVault");
         vm.label(barbie, "Barbie");
-        vm.startPrank(ownerVault);
+        vm.prank(ownerVault);
         vault = new Vault();
-        vm.stopPrank();
     }
 
     function testRewardsMultiplier() external {
