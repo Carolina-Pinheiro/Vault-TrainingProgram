@@ -53,38 +53,38 @@ contract Vault {
 
     /// @notice Function where the user deposits the liquidity, chooses the lock-up period and receives LP tokens
     /// @dev still in development
-    /// @param amount: amount of tokens to deposit
-    /// @param userLockUpPeriod: lock up period chosen by the user that will determine the rewards multiplier - 0.5 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
-    function deposit(uint256 amount, uint256 userLockUpPeriod) external {
+    /// @param amount_: amount of tokens to deposit
+    /// @param userLockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 0.5 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
+    function deposit(uint256 amount_, uint256 userLockUpPeriod_) external {
         // Check if any deposit has expired
         checkForDtUpdates();
 
         // TODO: Check if the Tokens can be transfered to the contract
 
         // Create a new deposit
-        Deposit memory newDeposit = Deposit({
-            balance: amount,
-            share: amount * getRewardsMultiplier(userLockUpPeriod),
+        Deposit memory newDeposit_ = Deposit({
+            balance: amount_,
+            share: amount_ * getRewardsMultiplier(userLockUpPeriod_),
             depositShareId: getCurrentShareId(),
             id: depositID,
             owner: msg.sender
         });
         depositID++;
-        depositList[msg.sender].push(newDeposit);
+        depositList[msg.sender].push(newDeposit_);
     }
 
     /// @notice  Function where the user withdraws the deposits
     /// @dev still in development
-    /// @param depositsToWithdraw: list of deposits ids that the user wants to withdraw, if left empty all deposits will be withdrawn
-    function withdraw(uint256[] calldata depositsToWithdraw) external {
+    /// @param depositsToWithdraw_: list of deposits ids that the user wants to withdraw, if left empty all deposits will be withdrawn
+    function withdraw(uint256[] calldata depositsToWithdraw_) external {
         // Check if any deposit has expired
         checkForDtUpdates();
     }
 
     /// @notice Function where the user can claim the rewards it has accrued
     /// @dev still in development
-    /// @param rewardsToClaim: amount of rewards that the user wants to claim, if left empty all rewards will be claimed
-    function claimRewards(uint256 rewardsToClaim) external {
+    /// @param rewardsToClaim_: amount of rewards that the user wants to claim, if left empty all rewards will be claimed
+    function claimRewards(uint256 rewardsToClaim_) external {
         // Check if any deposit has expired
         checkForDtUpdates();
     }
@@ -101,13 +101,13 @@ contract Vault {
 
     /// @notice Gets the rewards multiplier according to the lockUpPeriod
     /// @dev still in development
-    /// @param userLockUpPeriod: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
+    /// @param userLockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
     /// @return rewardsMultiplier: the rewards multiplier according to the locking period
-    function getRewardsMultiplier(uint256 userLockUpPeriod) internal view returns (uint256) {
+    function getRewardsMultiplier(uint256 userLockUpPeriod_) internal view returns (uint256) {
         uint256 rewardsMultiplier;
 
-        if (lockUpPeriod[userLockUpPeriod] != 0) {
-            rewardsMultiplier = lockUpPeriod[userLockUpPeriod];
+        if (lockUpPeriod[userLockUpPeriod_] != 0) {
+            rewardsMultiplier = lockUpPeriod[userLockUpPeriod_];
         } else {
             revert wrongLockUpPeriod();
         }
