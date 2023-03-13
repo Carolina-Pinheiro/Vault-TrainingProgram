@@ -77,8 +77,8 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         // Create a new deposit
         Deposit memory newDeposit_ = Deposit({
             balance: amount_,
-            share: amount_ * getRewardsMultiplier(userLockUpPeriod_),
-            depositShareId: getCurrentShareId(),
+            share: amount_ * _getRewardsMultiplier(userLockUpPeriod_),
+            depositShareId: _getCurrentShareId(),
             id: depositID,
             owner: msg.sender
         });
@@ -117,7 +117,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @dev still in development
     /// @param userLockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
     /// @return rewardsMultiplier_ : the rewards multiplier according to the locking period
-    function getRewardsMultiplier(uint256 userLockUpPeriod_) internal view returns (uint256 rewardsMultiplier_) {
+    function _getRewardsMultiplier(uint256 userLockUpPeriod_) internal view returns (uint256 rewardsMultiplier_) {
         if (lockUpPeriod[userLockUpPeriod_] != 0) {
             rewardsMultiplier_ = lockUpPeriod[userLockUpPeriod_];
         } else {
@@ -129,7 +129,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @notice Gets the current share id
     /// @dev still in development
     /// @return currentShareId: the current share id
-    function getCurrentShareId() internal pure returns (uint256) {
+    function _getCurrentShareId() internal pure returns (uint256) {
         // TODO
 
         return 0;
