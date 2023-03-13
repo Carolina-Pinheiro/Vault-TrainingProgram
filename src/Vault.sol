@@ -58,15 +58,15 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @param lockUpPeriod: lock up period chosen by the user that will determine the rewards multiplier - 0.5 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
     function deposit(uint256 amount, uint256 lockUpPeriod) external {
         // Check if any deposit has expired
-        checkForDtUpdates();
+        _checkForDtUpdates();
 
         // TODO: Check if the Tokens can be transfered to the contract
 
         // Create a new deposit
         Deposit memory newDeposit = Deposit({
             balance: amount,
-            share: amount * getRewardsMultiplier(lockUpPeriod),
-            depositShareId: getCurrentShareId(),
+            share: amount * _getRewardsMultiplier(lockUpPeriod),
+            depositShareId: _getCurrentShareId(),
             id: depositID,
             owner: msg.sender
         });
@@ -80,7 +80,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @param depositsToWithdraw: list of deposits ids that the user wants to withdraw, if left empty all deposits will be withdrawn
     function withdraw(uint256[] calldata depositsToWithdraw) external {
         // Check if any deposit has expired
-        checkForDtUpdates();
+        _checkForDtUpdates();
     }
 
     /// @notice Function where the user can claim the rewards it has accrued
@@ -88,7 +88,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @param rewardsToClaim: amount of rewards that the user wants to claim, if left empty all rewards will be claimed
     function claimRewards(uint256 rewardsToClaim) external {
         // Check if any deposit has expired
-        checkForDtUpdates();
+        _checkForDtUpdates();
     }
 
     //-----------------------------------------------------------------------
@@ -97,14 +97,14 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     /// @notice Function that checks if any deposits have expired and if the total shares needs to be updated
     /// @dev still in development
-    function checkForDtUpdates() internal {
+    function _checkForDtUpdates() internal {
         // TODO
     }
 
     /// @notice Gets the rewards multiplier according to the lockUpPeriod
     /// @param lockUpPeriod: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
     /// @return rewardsMultiplier: the rewards multiplier according to the locking period
-    function getRewardsMultiplier(uint256 lockUpPeriod) internal pure returns (uint256) {
+    function _getRewardsMultiplier(uint256 lockUpPeriod) internal pure returns (uint256) {
         uint256 rewardsMultiplier;
         if (lockUpPeriod == 6) {
             rewardsMultiplier = 1;
@@ -126,7 +126,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @notice Gets the current share id
     /// @dev still in development
     /// @return currentShareId: the current share id
-    function getCurrentShareId() internal pure returns (uint256) {
+    function _getCurrentShareId() internal pure returns (uint256) {
         // TODO
 
         return 0;
