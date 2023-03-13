@@ -2,3 +2,4 @@
 @openzeppelin=lib/openzeppelin-contracts/
 @openzeppelin-upgradeable=lib/openzeppelin-contracts-upgradeable/
 @layerZeroOmnichain=lib/solidity-examples/contracts
+@uniswapv2=src/src-0_6_x/uniswapv2
