@@ -12,3 +12,5 @@
 	path = lib/openzeppelin-contracts-upgradeable
 	url = https://github.com/openzeppelin/openzeppelin-contracts-upgradeable
 	branch = v4.8.2
+[submodule "lib/v2-core"]
+	path = lib/v2-core
