@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLICENSED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.16;
 
 import { OFT } from "@layerZeroOmnichain/token/oft/OFT.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: UNLINCESED
-pragma solidity ^0.8.0;
+pragma solidity ^0.8.16;
 
 import { Test } from "@forge-std/Test.sol";
 import { Vault } from "src/src-default/Vault.sol";
