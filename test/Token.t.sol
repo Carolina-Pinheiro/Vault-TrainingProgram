@@ -2,8 +2,8 @@
 pragma solidity ^0.8.0;
 
 import { Test } from "@forge-std/Test.sol";
-import { Token } from "src/Token.sol";
-import { Vault } from "src/Vault.sol";
+import { Token } from "src/src-default/Token.sol";
+import { Vault } from "src/src-default/Vault.sol";
 import { LZEndpointMock } from "@layerZeroOmnichain/mocks/LZEndpointMock.sol";
 
 contract TokenTest is Test {
@@ -14,6 +14,7 @@ contract TokenTest is Test {
     address public lucy = vm.addr(12);
     address public phoebe = vm.addr(13);
     address public julien = vm.addr(14);
+    address public LPToken = vm.addr(15); // not actually the LPToken address, used to initialize vault
 
     function setUp() external {
         // Set-up the vault contract
@@ -22,7 +23,7 @@ contract TokenTest is Test {
         vm.label(phoebe, "Phoebe");
         vm.label(julien, "Julien");
         vm.startPrank(ownerVault);
-        vault = new Vault();
+        vault = new Vault(LPToken);
         lzEndpoint = new LZEndpointMock(1); // 1 = chainId
         token = new Token(address(lzEndpoint), address(vault));
         vm.stopPrank();

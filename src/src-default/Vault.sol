@@ -12,6 +12,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     uint256 depositID = 0;
     uint256 REWARDS_PER_SECOND = 317;
+    address public LPToken;
 
     //
     struct Deposit {
@@ -35,7 +36,9 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 shareToReduce; // + for nd, - for le
     }
 
-    constructor() initializer { }
+    constructor(address LPToken_) initializer {
+        LPToken = LPToken_;
+    }
 
     receive() external payable { }
 
@@ -54,18 +57,22 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
 
     /// @notice Function where the user deposits the liquidity, chooses the lock-up period and receives LP tokens
     /// @dev still in development
-    /// @param amount: amount of tokens to deposit
-    /// @param lockUpPeriod: lock up period chosen by the user that will determine the rewards multiplier - 0.5 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
-    function deposit(uint256 amount, uint256 lockUpPeriod) external {
+    /// @param amount_: amount of tokens to deposit
+    /// @param lockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 0.5 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
+    function deposit(uint256 amount_, uint256 lockUpPeriod_) external {
         // Check if any deposit has expired
         _checkForDtUpdates();
 
-        // TODO: Check if the Tokens can be transfered to the contract
+        // Transfer the tokens to the contract
+        (bool success, bytes memory data) = LPToken.call(
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), amount_)
+        );
+        require(success);
 
         // Create a new deposit
         Deposit memory newDeposit = Deposit({
-            balance: amount,
-            share: amount * _getRewardsMultiplier(lockUpPeriod),
+            balance: amount_,
+            share: amount_ * _getRewardsMultiplier(lockUpPeriod_),
             depositShareId: _getCurrentShareId(),
             id: depositID,
             owner: msg.sender
