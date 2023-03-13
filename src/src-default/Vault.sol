@@ -18,6 +18,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 depositID = 0;
     mapping(uint256 => uint256) private lockUpPeriod; // lockUpPeriod -> rewardsMultiplier
     uint256 REWARDS_PER_SECOND = 317; 
+    address public LPToken;
 
     //
     struct Deposit {
@@ -41,12 +42,13 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 shareToReduce; // + for nd, - for le
     }
 
-    constructor()  initializer {
+    constructor(address LPToken_)  initializer {
         // Set lock up period
         lockUpPeriod[6] = 1;
         lockUpPeriod[1] = 2;
         lockUpPeriod[2] = 4;
         lockUpPeriod[4] = 8;
+        LPToken = LPToken_;
     }
 
     receive() external payable { }
@@ -72,7 +74,11 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         // Check if any deposit has expired
         _checkForDtUpdates();
 
-        // TODO: Check if the Tokens can be transfered to the contract
+        // Transfer the tokens to the contract
+        (bool success, bytes memory data) = LPToken.call(
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), amount_)
+        );
+        require(success);
 
         // Create a new deposit
         Deposit memory newDeposit_ = Deposit({
