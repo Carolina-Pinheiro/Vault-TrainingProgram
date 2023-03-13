@@ -13,4 +13,8 @@
 	url = https://github.com/openzeppelin/openzeppelin-contracts-upgradeable
 	branch = v4.8.2
 [submodule "lib/v2-core"]
-	path = lib/v2-core
+	path = src/src-0_6_x/uniswap/v2-core
+[submodule "lib/lib"]
+	path = src/src-0_6_x/uniswap/solidity-lib
+[submodule "lib/v2-periphary"]
+	path = src/src-0_6_x/uniswap/v2-periphary
