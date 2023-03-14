@@ -4,6 +4,8 @@ pragma solidity ^0.8.16;
 import { Initializable } from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
 import { OwnableUpgradeable } from "@openzeppelin-upgradeable/contracts/access/OwnableUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
+import { LinkedList } from "src/src-default/LinkedList.sol";
+import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 
 contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     //-----------------------------------------------------------------------
@@ -13,8 +15,13 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     uint256 depositID = 0;
     uint256 REWARDS_PER_SECOND = 317;
     address public LPToken;
+    uint256 private _lastExpiredDepositSharesUpdate = 0;
 
+    // There are two situations when a depositShare updates - new deposit (nd) or lock up ends (le)
+    // The linked list refers to the depositSharesUpdates, it is organized from past to future (past refers to the beggining of the list, future to the end)
+    LinkedList private _depositSharesUpdates = new LinkedList();
     //
+
     struct Deposit {
         uint256 balance; // number of LP tokens deposit
         uint256 share; // share of pool given the rewards multiplier
@@ -27,17 +34,21 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
 
-    // There are two situations when a depositShare updates - new deposit (nd) or lock up ends (le)
-    // The linked list refers to the depositSharesUpdates, it is organized from past to future (past refers to the beggining of the list, future to the end)
-    // TODO: implement linked list
-    struct depositSharesUpdates {
-        uint256 nextId;
-        uint256 endTime; // in case of nd it is 'now', le it is 'now+lock-up time'
-        uint256 shareToReduce; // + for nd, - for le
-    }
+    event LogUint(uint256);
 
     constructor(address LPToken_) initializer {
         LPToken = LPToken_;
+        /**
+         * LinkedList.Node memory zeroNode =
+         *         LinkedList.Node({
+         *                           nextId: 0,
+         *                           endTime: 1,
+         *                           shareToReduce: 0,
+         *                           dtAtDeposit: 0
+         *                         });
+         *     _depositSharesUpdates.insert(zeroNode, 0);
+         *
+         */
     }
 
     receive() external payable { }
@@ -70,9 +81,10 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         require(success);
 
         // Create a new deposit
+        uint256 share = amount_ * _getRewardsMultiplier(lockUpPeriod_);
         Deposit memory newDeposit = Deposit({
             balance: amount_,
-            share: amount_ * _getRewardsMultiplier(lockUpPeriod_),
+            share: share,
             depositShareId: _getCurrentShareId(),
             id: depositID,
             owner: msg.sender
@@ -80,6 +92,9 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         depositList.push(newDeposit);
         ownersDepositId[msg.sender].push(depositID);
         depositID++;
+
+        _insertNewNode(0, share, true); // new deposit
+        _insertNewNode(lockUpPeriod_, share, false); // lock up period ends
     }
 
     /// @notice  Function where the user withdraws the deposits
@@ -139,6 +154,51 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         return 0;
     }
 
+    ///
+    ///
+    ///
+    function _insertNewNode(uint256 lockUpPeriod_, uint256 shares_, bool isNewDeposit_) internal {
+        // Search list since the lastExpiredDepositShareUpdate to insert the new deposit and its end
+        uint256 endTime_ = _calculateEndTime(lockUpPeriod_, block.timestamp);
+        (uint256 previousId_, uint256 nextId_) =
+            _depositSharesUpdates.findPosition(endTime_, _lastExpiredDepositSharesUpdate);
+
+        // insert into list
+        ILinkedList.Node memory newNode = ILinkedList.Node({
+            nextId: nextId_,
+            endTime: endTime_,
+            shares: shares_,
+            dtAtDeposit: 10,
+            isNewDeposit: isNewDeposit_
+        });
+        _depositSharesUpdates.insert(newNode, previousId_);
+
+        if (isNewDeposit_ && previousId_ != 0) {
+            _lastExpiredDepositSharesUpdate = _depositSharesUpdates.getNextIdOfNode(previousId_);
+        } else if (isNewDeposit_) {
+            _lastExpiredDepositSharesUpdate = _depositSharesUpdates.getHead();
+        }
+    }
+
+    ///
+    ///
+    ///
+    function _calculateEndTime(uint256 lockUpPeriod_, uint256 currentTime_) internal pure returns (uint256 endTime_) {
+        uint256 factor_;
+        //TODO: implement this better
+        if (lockUpPeriod_ == 6) {
+            factor_ = 26;
+            lockUpPeriod_ = 1;
+        } else if (lockUpPeriod_ == 0) {
+            factor_ = 0;
+        } else {
+            factor_ = 52;
+        }
+
+        endTime_ = lockUpPeriod_ * factor_ * 1 weeks + currentTime_;
+        return (endTime_);
+    }
     // By marking this internal function with `onlyOwner`, we only allow the owner account to authorize an upgrade
+
     function _authorizeUpgrade(address newImplementation_) internal override onlyOwner { }
 }
