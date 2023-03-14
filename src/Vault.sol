@@ -5,7 +5,7 @@ contract Vault {
     //-----------------------------------------------------------------------
     //---------------------------ERRORS-& EVENTS-----------------------------
     //-----------------------------------------------------------------------
-    error wrongLockUpPeriod();
+    error WrongLockUpPeriodError();
 
     //-----------------------------------------------------------------------
     //------------------------------VARIABLES--------------------------------
@@ -57,7 +57,7 @@ contract Vault {
     /// @param userLockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 0.5 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
     function deposit(uint256 amount_, uint256 userLockUpPeriod_) external {
         // Check if any deposit has expired
-        checkForDtUpdates();
+        _checkForDtUpdates();
 
         // TODO: Check if the Tokens can be transfered to the contract
 
@@ -78,7 +78,7 @@ contract Vault {
     /// @param depositsToWithdraw_: list of deposits ids that the user wants to withdraw, if left empty all deposits will be withdrawn
     function withdraw(uint256[] calldata depositsToWithdraw_) external {
         // Check if any deposit has expired
-        checkForDtUpdates();
+        _checkForDtUpdates();
     }
 
     /// @notice Function where the user can claim the rewards it has accrued
@@ -86,7 +86,7 @@ contract Vault {
     /// @param rewardsToClaim_: amount of rewards that the user wants to claim, if left empty all rewards will be claimed
     function claimRewards(uint256 rewardsToClaim_) external {
         // Check if any deposit has expired
-        checkForDtUpdates();
+        _checkForDtUpdates();
     }
 
     //-----------------------------------------------------------------------
@@ -95,23 +95,21 @@ contract Vault {
 
     /// @notice Function that checks if any deposits have expired and if the total shares needs to be updated
     /// @dev still in development
-    function checkForDtUpdates() internal {
+    function _checkForDtUpdates() internal {
         // TODO
     }
 
     /// @notice Gets the rewards multiplier according to the lockUpPeriod
     /// @dev still in development
     /// @param userLockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
-    /// @return rewardsMultiplier: the rewards multiplier according to the locking period
-    function getRewardsMultiplier(uint256 userLockUpPeriod_) internal view returns (uint256) {
-        uint256 rewardsMultiplier;
-
+    /// @return rewardsMultiplier_ : the rewards multiplier according to the locking period
+    function getRewardsMultiplier(uint256 userLockUpPeriod_) internal view returns (uint256 rewardsMultiplier_) {
         if (lockUpPeriod[userLockUpPeriod_] != 0) {
-            rewardsMultiplier = lockUpPeriod[userLockUpPeriod_];
+            rewardsMultiplier_ = lockUpPeriod[userLockUpPeriod_];
         } else {
-            revert wrongLockUpPeriod();
+            revert WrongLockUpPeriodError();
         }
-        return rewardsMultiplier;
+        return rewardsMultiplier_;
     }
 
     /// @notice Gets the current share id
