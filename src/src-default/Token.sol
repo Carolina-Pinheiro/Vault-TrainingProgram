@@ -2,7 +2,7 @@
 pragma solidity ^0.8.16;
 
 import { OFT } from "@layerZeroOmnichain/token/oft/OFT.sol";
-import "@openzeppelin/contracts/access/AccessControl.sol";
+import { AccessControl } from "@openzeppelin/contracts/access/AccessControl.sol";
 
 /// @title A LayerZero OmnichainFungibleToken example of BasedOFT
 /// @notice Use this contract only on the BASE CHAIN. It locks tokens on source, on outgoing send(), and unlocks tokens when receiving from other chains.
@@ -12,7 +12,7 @@ contract Token is OFT, AccessControl {
     address private _vaultContract;
     bytes32 public constant MINTER_ROLE = keccak256("MINTER_ROLE");
 
-    constructor(address _layerZeroEndpoint, address vaultContract_) OFT("Token", "TOK", _layerZeroEndpoint) {
+    constructor(address layerZeroEndpoint_, address vaultContract_) OFT("Token", "TOK", layerZeroEndpoint_) {
         _vaultContract = vaultContract_;
         _setupRole(MINTER_ROLE, _vaultContract);
     }
