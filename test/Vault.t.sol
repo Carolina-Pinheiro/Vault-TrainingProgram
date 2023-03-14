@@ -5,7 +5,7 @@ import { Test } from "@forge-std/Test.sol";
 import { Vault } from "src/src-default/Vault.sol";
 import { Token } from "src/src-default/Token.sol";
 import { LZEndpointMock } from "@layerZeroOmnichain/mocks/LZEndpointMock.sol";
-import { WETH9 } from "src/src-default/WETH9.sol";
+import { WETH9 } from "test/WETH9.sol";
 import { PoolToken } from "test/PoolToken.sol";
 
 contract VaultTest is Test {
@@ -51,9 +51,21 @@ contract VaultTest is Test {
         vm.label(phoebe, "Phoebe");
         vm.label(julien, "Julien");
         rewardToken = new Token(address(lzEndpoint), address(vault));
-        LPToken = setUpUniswap();
+        LPToken = _setUpUniswap();
         vm.prank(ownerVault);
         vault = new Vault(LPToken);
+    }
+
+    function testSingleDeposit() external {
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+
+        //Approve and transfer tokens to the vault
+        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
+        require(success);
+
+        vault.deposit(1, 6);
+        vm.stopPrank();
     }
 
     function testRewardsMultiplier() external {
@@ -61,7 +73,7 @@ contract VaultTest is Test {
         vm.deal(lucy, 10 ether);
 
         vm.startPrank(lucy);
-        uint256 balance = userGetLPTokens(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
 
         //Approve and transfer tokens to the vault
         (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
@@ -85,7 +97,7 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
-    function testProxy() external {
+    function _testProxy() external {
         //TODO
     }
 
@@ -95,7 +107,7 @@ contract VaultTest is Test {
 
         // User gets LP Tokens after depositing tokens to the pair
         vm.startPrank(phoebe);
-        uint256 balance = userGetLPTokens(phoebe);
+        uint256 balance = _userGetLPTokens(phoebe);
 
         //Approve and transfer tokens to the vault
         (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
@@ -107,7 +119,21 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
-    function setUpUniswap() public returns (address) {
+    function testVariousDeposits() external {
+        vm.startPrank(phoebe);
+        uint256 balance = _userGetLPTokens(phoebe);
+
+        //Approve and transfer tokens to the vault
+        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
+        require(success);
+
+        vault.deposit(20, 1);
+        vault.deposit(30, 2);
+        vault.deposit(40, 4);
+        vault.deposit(10, 6);
+    }
+
+    function _setUpUniswap() internal returns (address) {
         // Setup token contracts
         weth = new WETH9();
         vm.label(address(weth), "WETH");
@@ -121,6 +147,11 @@ contract VaultTest is Test {
         poolToken.mint(lucy, 10 ether);
         poolToken.mint(julien, 10 ether);
         vm.stopPrank();
+
+        // Give ether to all the actors
+        vm.deal(phoebe, 10 ether);
+        vm.deal(lucy, 10 ether);
+        vm.deal(julien, 10 ether);
 
         // Setup Uniswap V2 contracts
         factory = deployCode("UniswapV2Factory.sol", abi.encode(address(0)));
@@ -154,7 +185,7 @@ contract VaultTest is Test {
     }
 
     // Function used to give LPTokens to a user, must be preeced with startPrank
-    function userGetLPTokens(address user) public returns (uint256) {
+    function _userGetLPTokens(address user) internal returns (uint256) {
         // Wrap the ETH
         weth.deposit{ value: 5 ether }();
 
