@@ -7,6 +7,7 @@ import { Token } from "src/src-default/Token.sol";
 import { LZEndpointMock } from "@layerZeroOmnichain/mocks/LZEndpointMock.sol";
 import { WETH9 } from "test/WETH9.sol";
 import { PoolToken } from "test/PoolToken.sol";
+import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 
 contract VaultTest is Test {
     Vault vault;
@@ -43,6 +44,7 @@ contract VaultTest is Test {
     LZEndpointMock lzEndpoint;
 
     event LogAddress(address);
+    event LogUint(uint256);
 
     function setUp() external {
         // Set-up the vault contract
@@ -86,15 +88,17 @@ contract VaultTest is Test {
         vault.deposit(1, 4);
         vm.stopPrank();
 
-        (, uint256 rewardsMultiplier6Months,,,) = vault.depositList(vault.ownersDepositId(lucy, 0));
-        (, uint256 rewardsMultiplier1Year,,,) = vault.depositList(vault.ownersDepositId(lucy, 1));
-        (, uint256 rewardsMultiplier2Years,,,) = vault.depositList(vault.ownersDepositId(lucy, 2));
-        (, uint256 rewardsMultiplier4Years,,,) = vault.depositList(vault.ownersDepositId(lucy, 3));
+        vm.startPrank(address(vault));
+        ILinkedList.Node memory node6Months = vault.getDeposit(vault.ownersDepositId(lucy, 0));
+        ILinkedList.Node memory node1Year = vault.getDeposit(vault.ownersDepositId(lucy, 1));
+        ILinkedList.Node memory node2Years = vault.getDeposit(vault.ownersDepositId(lucy, 2));
+        ILinkedList.Node memory node4Years = vault.getDeposit(vault.ownersDepositId(lucy, 3));
+        vm.stopPrank();
 
-        assertEq(rewardsMultiplier6Months, 1); // 6 months
-        assertEq(rewardsMultiplier1Year, 2); // 1 year
-        assertEq(rewardsMultiplier2Years, 4); // 2 years
-        assertEq(rewardsMultiplier4Years, 8); // 4 years
+        assertEq(node6Months.share, 1); // 6 months
+        assertEq(node1Year.share, 2); // 1 year
+        assertEq(node2Years.share, 4); // 2 years
+        assertEq(node4Years.share, 8); // 4 years
 
         //Test with an incorrect lock up period
         vm.startPrank(lucy);
@@ -121,9 +125,34 @@ contract VaultTest is Test {
         (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
         require(success);
 
-        // Try depositing, if the deposit is successful it's because the vault was able to transfer the tokens to itself
-        vault.deposit(20, 1);
+        vm.stopPrank();
 
+        // Try depositing, if the deposit is successful it's because the vault was able to transfer the tokens to itself
+        vm.startPrank(address(vault));
+        // Transfer the tokens to the contract
+        (success,) = LPToken.call(
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", phoebe, address(vault), balance)
+        );
+        require(success);
+        vm.stopPrank();
+    }
+
+    function testRewardsAcrueing() external{
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+
+        //Approve and transfer tokens to the vault
+        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
+        require(success);
+
+        vault.deposit(100, 6);
+        vm.stopPrank();
+
+        vm.warp( block.timestamp + 52 weeks);
+
+        vm.startPrank(lucy);
+        vault.claimRewards(0);
+        emit LogUint(vault.rewardsAcrued(lucy));
         vm.stopPrank();
     }
 

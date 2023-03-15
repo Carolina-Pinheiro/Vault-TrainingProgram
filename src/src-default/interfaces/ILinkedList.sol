@@ -9,10 +9,10 @@ interface ILinkedList {
      */
     struct Node {
         uint256 nextId;
+        uint256 startTime;
         uint256 endTime; // in case of nd it is 'now', le it is 'now+lock-up time'
-        //uint256 previousTime;
-        uint256 shares; // + for nd, - for le
-        uint256 dtAtDeposit; //
-        bool isNewDeposit; // true if it is a new deposit, false if not
+        uint256 share; // + for nd, - for le
+        uint256 currentTotalWeight;
+        address owner;
     }
 }

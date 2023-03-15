@@ -33,7 +33,7 @@ contract LinkedList is ILinkedList {
      * @param node_ The new node.
      * @param previousNodeId_ The slot of the previous node.
      */
-    function insert(Node memory node_, uint256 previousNodeId_) public {
+    function insert(Node memory node_, uint256 previousNodeId_) public returns (uint256) {
         uint256 currId_ = ++_id;
 
         _nodes[currId_] = node_;
@@ -45,6 +45,8 @@ contract LinkedList is ILinkedList {
         if (previousNodeId_ != 0) _nodes[previousNodeId_].nextId = currId_;
         // If the node is the first, then it is the new head.
         else _head = currId_;
+
+        return currId_;
     }
 
     /**
@@ -75,7 +77,7 @@ contract LinkedList is ILinkedList {
      * @notice Returns the tail of the linked list.
      * @return The tail of the linked list.
      */
-    function getTail() external view returns (uint256) {
+    function getTail() external view onlyVault returns (uint256) {
         return (_getTail());
     }
 
@@ -95,6 +97,38 @@ contract LinkedList is ILinkedList {
         return (_getMostRecentId());
     }
 
+    function getStartTimeOfNode(uint256 id_) external view onlyVault returns (uint256) {
+        return (_getEndTimeOfNode(id_));
+    }
+
+    function _getStartTimeOfNode(uint256 id_) internal view returns (uint256) {
+        return _nodes[id_].startTime;
+    }
+
+    function getOwner(uint256 id_) external view onlyVault returns (address) {
+        return (_getOwner(id_));
+    }
+
+    function _getOwner(uint256 id_) internal view returns (address) {
+        return _nodes[id_].owner;
+    }
+
+    function getShares(uint256 id_) external view onlyVault returns (uint256) {
+        return (_getShares(id_));
+    }
+
+    function _getShares(uint256 id_) internal view returns (uint256) {
+        return _nodes[id_].share;
+    }
+
+    function getCurrentTotalWeight(uint256 id_) external view onlyVault returns (uint256) {
+        return (_getCurrentTotalWeight(id_));
+    }
+
+    function _getCurrentTotalWeight(uint256 id_) internal view returns (uint256) {
+        return _nodes[id_].currentTotalWeight;
+    }
+
     function _getEndTimeOfNode(uint256 id_) internal view returns (uint256) {
         return _nodes[id_].endTime;
     }
@@ -107,7 +141,7 @@ contract LinkedList is ILinkedList {
         return (_id);
     }
 
-    function _getTail() internal view onlyVault returns (uint256) {
+    function _getTail() internal view returns (uint256) {
         return _tail;
     }
 
