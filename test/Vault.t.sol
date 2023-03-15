@@ -7,6 +7,7 @@ import { Token } from "src/src-default/Token.sol";
 import { LZEndpointMock } from "@layerZeroOmnichain/mocks/LZEndpointMock.sol";
 import { WETH9 } from "test/WETH9.sol";
 import { PoolToken } from "test/PoolToken.sol";
+import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 
 contract VaultTest is Test {
     Vault vault;
@@ -43,6 +44,7 @@ contract VaultTest is Test {
     LZEndpointMock lzEndpoint;
 
     event LogAddress(address);
+    event LogUint(uint256);
 
     function setUp() external {
         // Set-up the vault contract
@@ -83,10 +85,10 @@ contract VaultTest is Test {
         uint8[4] memory rewardsTiers = [6, 1, 2, 4]; // 6 months, 1 year, 2 years, 4 years
         uint8[4] memory expectedRewardsMultiplier = [1, 2, 4, 8];
         uint256 rewardsMultiplier;
-        vm.startPrank(barbie);
+        vm.startPrank(lucy);
         for (uint256 i = 0; i < 4; i++) {
             vault.deposit(1, rewardsTiers[i]);
-            (, rewardsMultiplier,,,) = vault.depositList(barbie, i);
+            (, rewardsMultiplier,,,) = vault.depositList(lucy, i);
             assertEq(rewardsMultiplier, expectedRewardsMultiplier[i]);
         }
 
@@ -113,9 +115,34 @@ contract VaultTest is Test {
         (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
         require(success);
 
-        // Try depositing, if the deposit is successful it's because the vault was able to transfer the tokens to itself
-        vault.deposit(20, 1);
+        vm.stopPrank();
 
+        // Try depositing, if the deposit is successful it's because the vault was able to transfer the tokens to itself
+        vm.startPrank(address(vault));
+        // Transfer the tokens to the contract
+        (success,) = LPToken.call(
+            abi.encodeWithSignature("transferFrom(address,address,uint256)", phoebe, address(vault), balance)
+        );
+        require(success);
+        vm.stopPrank();
+    }
+
+    function testRewardsAcrueing() external{
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+
+        //Approve and transfer tokens to the vault
+        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
+        require(success);
+
+        vault.deposit(100, 6);
+        vm.stopPrank();
+
+        vm.warp( block.timestamp + 52 weeks);
+
+        vm.startPrank(lucy);
+        vault.claimRewards(0);
+        emit LogUint(vault.rewardsAcrued(lucy));
         vm.stopPrank();
     }
 
