@@ -89,11 +89,10 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 share = amount_ * _getRewardsMultiplier(lockUpPeriod_);
         uint256 depositID = _insertNewNode(lockUpPeriod_, share); // new deposit
         ownersDepositId[msg.sender].push(depositID);
+        
         if (_totalShares != 0){
             _totalWeightLocked = _totalWeightLocked + (REWARDS_PER_SECOND * (block.timestamp - _lastMintTime)) / (_totalShares);
-        } else{
-            _totalWeightLocked = 1; // Note: pensar nisto melhor
-        }
+        } 
         _lastMintTime = block.timestamp;
         _totalShares = _totalShares + share;
     }
@@ -125,10 +124,15 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         uint256 currentId_ = _deposits.getHead();
         address owner_;
 
+
         // See if any deposit has expired
         while (block.timestamp > _deposits.getEndTimeOfNode(currentId_) && currentId_ != 0) {
+            if (_totalShares != 0){
+                _totalWeightLocked = _totalWeightLocked + (REWARDS_PER_SECOND * (_deposits.getEndTimeOfNode(currentId_)- _lastMintTime))/(_totalShares);
+            } else {
+                _totalWeightLocked = 0;
+            }
             owner_ = _deposits.getOwner(currentId_);
-            emit LogUint(_totalWeightLocked);
             rewardsAcrued[owner_] = rewardsAcrued[owner_]
                 + (_totalWeightLocked - _deposits.getCurrentTotalWeight(currentId_)) * _deposits.getShares(currentId_);
             _totalShares = _totalShares - _deposits.getShares(currentId_);
@@ -137,6 +141,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
             if (currentId_ != 0){ // currentId_ = 0 -> tail, so the list is empty
                 _deposits.remove(0,currentId_); // the node to delete will always be the head, so there is no previousId
             }
+            _lastMintTime = _deposits.getEndTimeOfNode(currentId_);
         }
     }
 
