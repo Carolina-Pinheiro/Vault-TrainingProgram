@@ -6,6 +6,7 @@ import { OwnableUpgradeable } from "@openzeppelin-upgradeable/contracts/access/O
 import { UUPSUpgradeable } from "@openzeppelin-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { LinkedList } from "src/src-default/LinkedList.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
+import { Token } from "src/src-default/Token.sol";
 
 contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     //-----------------------------------------------------------------------
@@ -13,9 +14,10 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     //-----------------------------------------------------------------------
 
     uint256 REWARDS_PER_SECOND = 317;
-    address public LPToken;
+    address private _LPToken;
     uint256 private _totalWeightLocked;
     uint256 private _totalShares;
+    Token private _rewardsToken;
     uint256 private _lastMintTime;
 
     // There are two situations when a depositShare updates - new deposit (nd) or lock up ends (le)
@@ -26,6 +28,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
 
     event LogUint(uint256);
+    event LogRewardsTokenMinted(address, uint256);
 
     modifier onlyVault() {
         require(msg.sender == address(this)); // TODO: add error
@@ -33,7 +36,8 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     }
 
     constructor(address LPToken_) initializer {
-        LPToken = LPToken_;
+        _LPToken = LPToken_;
+        _rewardsToken = new Token(address(0x0), address(this));
     }
 
     receive() external payable { }
@@ -60,7 +64,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
         _checkForExpiredDeposits();
 
         // Transfer the tokens to the contract
-        (bool success, bytes memory data) = LPToken.call(
+        (bool success, bytes memory data) = _LPToken.call(
             abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), amount_)
         );
         require(success);
@@ -80,7 +84,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     /// @notice  Function where the user withdraws the deposits
     /// @dev still in development
     /// @param depositsToWithdraw: list of deposits ids that the user wants to withdraw, if left empty all deposits will be withdrawn
-    function withdraw(uint256[] calldata depositsToWithdraw) external {
+    function withdraw(uint256 depositsToWithdraw) external {
         // Check if any deposit has expired
         _checkForExpiredDeposits();
     }
@@ -91,6 +95,18 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable {
     function claimRewards(uint256 rewardsToClaim) external {
         // Check if any deposit has expired
         _checkForExpiredDeposits();
+
+        if (rewardsAcrued[msg.sender] > 0 ){
+            // Transfer rewards to the user
+            if (rewardsToClaim == 0) { // if rewardsToClaim is left at zero, all rewards will be claimed
+                rewardsToClaim = rewardsAcrued[msg.sender] ;
+            } 
+            rewardsAcrued[msg.sender] = rewardsAcrued[msg.sender] - rewardsToClaim;
+            _rewardsToken.mint(msg.sender,rewardsToClaim);
+            emit LogRewardsTokenMinted(msg.sender,rewardsToClaim);
+        } else {
+            revert("No rewards to claim"); // TODO: write proper error message
+        }
     }
 
     //-----------------------------------------------------------------------
