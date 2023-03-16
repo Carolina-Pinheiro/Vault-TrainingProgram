@@ -41,13 +41,13 @@ contract VaultTest is Test {
     //
     address public pool;
 
-    LZEndpointMock lzEndpoint;    
+    LZEndpointMock lzEndpoint;
     uint256 REWARDS_PER_SECOND = 317;
-
 
     event LogAddress(address);
     event LogUint(uint256);
     event LogUintPair(uint256, uint256);
+    event LogNode(ILinkedList.Node);
 
     function setUp() external {
         // Set-up the vault contract
@@ -130,7 +130,7 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
-    function testRewardsAcrueing() external{
+    function testRewardsAcrueing() external {
         uint256 startTime = block.timestamp;
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
@@ -148,20 +148,20 @@ contract VaultTest is Test {
         //Approve and transfer tokens to the vault
         (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
         require(success);
-        vault.deposit(100,6); 
+        vault.deposit(100, 6);
         vm.stopPrank();
 
-        vm.warp( startTime + 27 weeks); // Lucy has expired - she will get the total awards for the first 3 months and half of the rewards for the next 3 months
-        uint256 expectedRewards =  (REWARDS_PER_SECOND * 13 weeks) + (REWARDS_PER_SECOND * 13 weeks)/2  ;
+        vm.warp(startTime + 27 weeks); // Lucy has expired - she will get the total awards for the first 3 months and half of the rewards for the next 3 months
+        uint256 expectedRewards = (REWARDS_PER_SECOND * 13 weeks) + (REWARDS_PER_SECOND * 13 weeks) / 2;
         vm.startPrank(lucy);
-        vault.withdraw(0);
-        assertEq(vault.rewardsAcrued(lucy), expectedRewards);
+        uint256 rewardsToClaim = vault.claimRewards(0);
+        assertEq(rewardsToClaim, expectedRewards);
         vm.stopPrank();
 
-        vm.warp ( startTime + 53 weeks);
+        vm.warp(startTime + 53 weeks);
         vm.startPrank(julien); // at this point Julien will have half of the rewards for the initial 3 month period + all the rewards for the other 3 month period
-        vault.withdraw(0);
-        assertEq(vault.rewardsAcrued(julien), expectedRewards);
+        rewardsToClaim = vault.claimRewards(0);
+        assertEq(rewardsToClaim, expectedRewards);
         vm.stopPrank();
     }
 

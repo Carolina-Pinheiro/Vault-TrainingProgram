@@ -4,13 +4,6 @@ pragma solidity ^0.8.13;
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 
 contract LinkedList is ILinkedList {
-    address public vault;
-
-    modifier onlyVault() {
-        require(msg.sender == vault);
-        _;
-    }
-
     /// @notice The head of the linked list.
     uint256 private _head;
     /// @notice The tail of the linked list.
@@ -19,13 +12,12 @@ contract LinkedList is ILinkedList {
     /**
      * @notice Maps an Id to a node.
      */
-    mapping(uint256 => Node) private _nodes;
+    mapping(uint256 => Node) public deposits;
 
     /// @notice The nonce for the linked list.
     uint256 private _id = 0;
 
     constructor() {
-        vault = msg.sender;
     }
 
     /**
@@ -36,13 +28,13 @@ contract LinkedList is ILinkedList {
     function insert(Node memory node_, uint256 previousNodeId_) public returns (uint256) {
         uint256 currId_ = ++_id;
 
-        _nodes[currId_] = node_;
+        deposits[currId_] = node_;
 
         // If the node is not the last, set the next node.
         if (node_.nextId == 0) _tail = currId_;
 
         // If the node is not the first, set the previous node to point to the new node.
-        if (previousNodeId_ != 0) _nodes[previousNodeId_].nextId = currId_;
+        if (previousNodeId_ != 0) deposits[previousNodeId_].nextId = currId_;
         // If the node is the first, then it is the new head.
         else _head = currId_;
 
@@ -60,7 +52,7 @@ contract LinkedList is ILinkedList {
         if (nextNodeId_ == 0) _tail = previousNodeId_;
 
         // If the removed node is not the head, set the next node of the previous node to the next node.
-        if (previousNodeId_ != 0) _nodes[previousNodeId_].nextId = nextNodeId_;
+        if (previousNodeId_ != 0) deposits[previousNodeId_].nextId = nextNodeId_;
         // If the previous node is null, the current node is the head, so set the head as the next node.
         else _head = nextNodeId_;
     }
@@ -69,7 +61,7 @@ contract LinkedList is ILinkedList {
      * @notice Returns the head of the linked list.
      * @return The head of the linked list.
      */
-    function getHead() external view returns (uint256) {
+    function getHead() public view returns (uint256) {
         return _head;
     }
 
@@ -77,64 +69,24 @@ contract LinkedList is ILinkedList {
      * @notice Returns the tail of the linked list.
      * @return The tail of the linked list.
      */
-    function getTail() external view onlyVault returns (uint256) {
-        return (_getTail());
+    function getTail() public view returns (uint256) {
+        return _tail;
     }
 
-    function getNode(uint256 id_) external view returns (Node memory) {
-        return _nodes[id_];
-    }
-
-    function getNextIdOfNode(uint256 id_) external view onlyVault returns (uint256) {
-        return (_getNextIdOfNode(id_));
-    }
-
-    function getEndTimeOfNode(uint256 id_) external view onlyVault returns (uint256) {
-        return (_getEndTimeOfNode(id_));
-    }
-
-    function getMostRecentId() external view onlyVault returns (uint256) {
+    function getMostRecentId() external view returns (uint256) {
         return (_getMostRecentId());
     }
 
-    function getStartTimeOfNode(uint256 id_) external view onlyVault returns (uint256) {
-        return (_getEndTimeOfNode(id_));
-    }
-
     function _getStartTimeOfNode(uint256 id_) internal view returns (uint256) {
-        return _nodes[id_].startTime;
-    }
-
-    function getOwner(uint256 id_) external view onlyVault returns (address) {
-        return (_getOwner(id_));
-    }
-
-    function _getOwner(uint256 id_) internal view returns (address) {
-        return _nodes[id_].owner;
-    }
-
-    function getShares(uint256 id_) external view onlyVault returns (uint256) {
-        return (_getShares(id_));
-    }
-
-    function _getShares(uint256 id_) internal view returns (uint256) {
-        return _nodes[id_].share;
-    }
-
-    function getCurrentTotalWeight(uint256 id_) external view onlyVault returns (uint256) {
-        return (_getCurrentTotalWeight(id_));
-    }
-
-    function _getCurrentTotalWeight(uint256 id_) internal view returns (uint256) {
-        return _nodes[id_].currentTotalWeight;
+        return deposits[id_].startTime;
     }
 
     function _getEndTimeOfNode(uint256 id_) internal view returns (uint256) {
-        return _nodes[id_].endTime;
+        return deposits[id_].endTime;
     }
 
-    function _getNextIdOfNode(uint256 id_) internal view returns (uint256) {
-        return _nodes[id_].nextId;
+    function getNextIdOfNode(uint256 id_) public view returns (uint256) {
+        return deposits[id_].nextId;
     }
 
     function _getMostRecentId() internal view returns (uint256) {
@@ -145,16 +97,15 @@ contract LinkedList is ILinkedList {
         return _tail;
     }
 
+    function getNode(uint256 id_) external view returns (Node memory) {
+        return deposits[id_];
+    }
+
     /**
      * @notice Finds the position of a new node based on the endTime
      * @return (previousId, nextId) the previous id and the next id where the node will be inserted
      */
-    function findPosition(uint256 endTime, uint256 firstIdToSearch)
-        external
-        view
-        onlyVault
-        returns (uint256, uint256)
-    {
+    function findPosition(uint256 endTime, uint256 firstIdToSearch) public view  returns (uint256, uint256) { 
         uint256 currId = firstIdToSearch;
 
         if (_id == 0) {
@@ -163,13 +114,13 @@ contract LinkedList is ILinkedList {
         }
 
         while (
-            _getEndTimeOfNode(_getNextIdOfNode(currId)) < endTime // finds the nodes between which to insert
+            _getEndTimeOfNode(getNextIdOfNode(currId)) < endTime // finds the nodes between which to insert
                 && _getTail() != currId // or is at the end of the list
         ) {
-            currId = _getNextIdOfNode(currId);
+            currId = getNextIdOfNode(currId);
         }
         uint256 previousId = currId;
-        uint256 nextId = _getNextIdOfNode(currId);
+        uint256 nextId = getNextIdOfNode(currId);
 
         return (previousId, nextId);
     }

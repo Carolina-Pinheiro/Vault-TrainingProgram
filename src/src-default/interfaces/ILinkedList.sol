@@ -12,6 +12,7 @@ interface ILinkedList {
         uint256 startTime;
         uint256 endTime; // in case of nd it is 'now', le it is 'now+lock-up time'
         uint256 share; // + for nd, - for le
+        uint256 depositedLPTokens;
         uint256 currentTotalWeight;
         address owner;
     }
