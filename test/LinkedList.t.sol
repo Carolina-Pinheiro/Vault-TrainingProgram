@@ -33,8 +33,15 @@ contract LinkedListTest is Test, ILinkedList {
         assertEq(previousId, 0);
         assertEq(nextId, 0);
 
-        Node memory node_ =
-            Node({ nextId: nextId, startTime: endTime - 10, endTime: endTime, share: 10, currentTotalWeight: 0, owner: julien  });
+        Node memory node_ = Node({
+            nextId: nextId,
+            startTime: endTime - 10,
+            endTime: endTime,
+            share: 10,
+            currentTotalWeight: 0,
+            owner: julien,
+            depositedLPTokens: 40
+        });
 
         list.insert(node_, previousId);
 
@@ -53,15 +60,30 @@ contract LinkedListTest is Test, ILinkedList {
         uint256 endTime = 100;
         vm.startPrank(vault);
         (uint256 previousId, uint256 nextId) = list.findPosition(endTime, list.getHead());
-        Node memory newNode_ =
-            Node({ nextId: nextId, startTime: endTime - 10, endTime: endTime, share: 10, currentTotalWeight: 0, owner: julien  });
+        Node memory newNode_ = Node({
+            nextId: nextId,
+            startTime: endTime - 10,
+            endTime: endTime,
+            share: 10,
+            currentTotalWeight: 0,
+            owner: julien,
+            depositedLPTokens: 40
+        });
 
         list.insert(newNode_, previousId);
 
         // Insert a new node - (lock-up ends) // 1 2
         endTime = endTime + 500;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({ nextId: nextId, startTime: endTime - 10, endTime: endTime, share: 20, currentTotalWeight: 0, owner: julien  });
+        newNode_ = Node({
+            nextId: nextId,
+            startTime: endTime - 10,
+            endTime: endTime,
+            share: 20,
+            currentTotalWeight: 0,
+            owner: julien,
+            depositedLPTokens: 40
+        });
         list.insert(newNode_, previousId);
         assertEq(list.getHead(), 1); // the first node is the head
         assertEq(list.getNextIdOfNode(1), 2); // the first node is connected to this new node
@@ -70,7 +92,15 @@ contract LinkedListTest is Test, ILinkedList {
         // Insert a new node between both of them // 1 3 2
         endTime = endTime - 50;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({ nextId: nextId, startTime: endTime - 10, endTime: endTime, share: 30, currentTotalWeight: 0, owner: julien  });
+        newNode_ = Node({
+            nextId: nextId,
+            startTime: endTime - 10,
+            endTime: endTime,
+            share: 30,
+            currentTotalWeight: 0,
+            owner: julien,
+            depositedLPTokens: 40
+        });
         list.insert(newNode_, previousId);
         assertEq(list.getHead(), 1); // the first node is the head
         assertEq(list.getNextIdOfNode(1), 3); // the first node is connected to this new node
@@ -80,7 +110,15 @@ contract LinkedListTest is Test, ILinkedList {
         // Insert a new node supposed to be in the second position // 1 4 3 2
         endTime = 110;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({ nextId: nextId, startTime: endTime - 10, endTime: endTime, share: 40, currentTotalWeight: 0, owner: julien });
+        newNode_ = Node({
+            nextId: nextId,
+            startTime: endTime - 10,
+            endTime: endTime,
+            share: 40,
+            currentTotalWeight: 0,
+            owner: julien,
+            depositedLPTokens: 40
+        });
         list.insert(newNode_, previousId);
         assertEq(list.getHead(), 1); // the first node is the head
         assertEq(list.getNextIdOfNode(1), 4); // the first node is connected to this new node
