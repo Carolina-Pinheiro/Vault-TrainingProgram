@@ -12,7 +12,7 @@ contract LinkedList is ILinkedList {
     /**
      * @notice Maps an Id to a node.
      */
-    mapping(uint256 => Node) public deposits;
+    mapping(uint256 => Node) internal deposits; 
 
     /// @notice The nonce for the linked list.
     uint256 private _id = 0;
