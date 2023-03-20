@@ -9,8 +9,7 @@ import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 import { Token } from "src/src-default/Token.sol";
 import { IVault } from "src/src-default/interfaces/IVault.sol";
 
-
-contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList,IVault {
+contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList, IVault {
     //-----------------------------------------------------------------------
     //---------------------------ERRORS-& EVENTS-----------------------------
     //-----------------------------------------------------------------------
@@ -29,10 +28,6 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     Token private _rewardsToken;
     uint256 private _lastMintTime;
     uint256 REWARDS_PER_SECOND = 317;
-
-    // There are two situations when a depositShare updates - new deposit (nd) or lock up ends (le)
-    // The linked list refers to the depositSharesUpdates, it is organized from past to future (past refers to the beggining of the list, future to the end)
-    //LinkedList private deposits = new LinkedList();
 
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
@@ -53,9 +48,9 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     }
 
     modifier onlyVault() {
-        require(msg.sender == address(this)); // TODO: add error
+        if (msg.sender != address(this)) revert MsgSenderIsNotVaultError();
         _;
-    }*/
+    }
 
     receive() external payable { }
 
@@ -66,7 +61,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     //-----------------------------------------------------------------------
 
     /// @notice Set-up for the contract to be upgradable in the future
-    
+
     function initialize() external initializer {
         // Initialize inheritance chain
         __Ownable_init();
@@ -83,11 +78,10 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
         _checkForExpiredDeposits();
 
         // Transfer the tokens to the contract
-        (bool success, ) = _LPToken.call(
+        (bool success,) = _LPToken.call(
             abi.encodeWithSignature("transferFrom(address,address,uint256)", msg.sender, address(this), amount_)
         );
         if (!success) revert TransferOfLPTokensWasNotPossibleError();
-        //require(success); // TODO: Custom error
 
         // Create a new deposit
         Deposit memory newDeposit_ = Deposit({
@@ -101,10 +95,9 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
         uint256 share = amount_ * _getRewardsMultiplier(lockUpPeriod_);
         uint256 depositID = _insertNewNode(lockUpPeriod_, share, amount_); // new deposit
         ownersDepositId[msg.sender].push(depositID);
-        if (_totalShares != 0){
-            _totalWeightLocked = _totalWeightLocked + (REWARDS_PER_SECOND * (block.timestamp - _lastMintTime)) / (_totalShares);
-        } 
-        _lastMintTime = block.timestamp;
+
+        // Update variables
+        _totalWeightLocked = _updateTotalWeightLocked(block.timestamp);
         _totalShares = _totalShares + share;
     }
 
@@ -114,22 +107,34 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     function withdraw(uint256[] calldata depositsToWithdraw_) external {
         // Check if any deposit has expired
         _checkForExpiredDeposits();
+
         uint256 totalLPTokensToWithdraw_ = 0;
-        if (depositsToWithdraw.length == 0){
+        // If the array if left empty, all deposits will try to be withdrawn
+        if (depositsToWithdraw.length == 0) {
             depositsToWithdraw = ownersDepositId[msg.sender];
         }
-        for (uint256 i=0; i<depositsToWithdraw.length; i++){
-            if (deposits[depositsToWithdraw[i]].endTime < block.timestamp && deposits[depositsToWithdraw[i]].owner == msg.sender){ // deposit has expired
-                // Zero out the deposits so the user may not be able to withdraw again
+
+        // Go over depositsToWithdraw array and check if any has expired
+        for (uint256 i = 0; i < depositsToWithdraw.length; i++) {
+            // Deposit has expired and belongs to the owner
+            if (
+                deposits[depositsToWithdraw[i]].endTime < block.timestamp
+                    && deposits[depositsToWithdraw[i]].owner == msg.sender
+            ) {
+                // Sum to the total amount of tokens to withdraw
                 totalLPTokensToWithdraw_ = totalLPTokensToWithdraw_ + deposits[depositsToWithdraw[i]].depositedLPTokens;
+
+                // Zero out the deposits so the user may not be able to withdraw again
                 deposits[depositsToWithdraw[i]].depositedLPTokens = 0;
-            } else{
+            } else {
                 emit LogWithdrawHasNotExpired(depositsToWithdraw[i]);
             }
         }
 
-        if (totalLPTokensToWithdraw_ != 0){
-            (bool success, ) = _LPToken.call(
+        // If there are tokens to transfer, transfer them
+        if (totalLPTokensToWithdraw_ != 0) {
+            // Transfer LP tokens to the msg.sender
+            (bool success,) = _LPToken.call(
                 abi.encodeWithSignature("transfer(address,uint256)", msg.sender, totalLPTokensToWithdraw_)
             );
             if (!success) revert TransferOfLPTokensWasNotPossibleError();
@@ -143,14 +148,20 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     function claimRewards(uint256 rewardsToClaim_) external {
         // Check if any deposit has expired
         _checkForExpiredDeposits();
-        if (rewardsAcrued[msg.sender] > 0 ){
-            // Transfer rewards to the user
-            if (rewardsToClaim == 0) { // if rewardsToClaim is left at zero, all rewards will be claimed
-                rewardsToClaim = rewardsAcrued[msg.sender] ;
-            } 
+
+        // If there are any rewards to claim, they will be distributed
+        if (rewardsAcrued[msg.sender] > 0) {
+            // If rewardsToClaim is left at zero, all rewards will be claimed
+            if (rewardsToClaim == 0) {
+                rewardsToClaim = rewardsAcrued[msg.sender];
+            }
+
+            // Update total amount of rewards held by the msg.sender
             rewardsAcrued[msg.sender] = rewardsAcrued[msg.sender] - rewardsToClaim;
-            _rewardsToken.mint(msg.sender,rewardsToClaim);
-            emit LogRewardsTokenMinted(msg.sender,rewardsToClaim);
+
+            // Mint rewards tokens to the user
+            _rewardsToken.mint(msg.sender, rewardsToClaim);
+            emit LogRewardsTokenMinted(msg.sender, rewardsToClaim);
         } else {
             revert NoRewardsToClaimError();
         }
@@ -158,33 +169,39 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
         return rewardsToClaim;
     }
 
+    function getDeposit(uint256 id_) external view onlyVault returns (ILinkedList.Node memory) {
+        return (deposits[id_]);
+    }
+
     //-----------------------------------------------------------------------
     //------------------------------INTERNAL---------------------------------
     //-----------------------------------------------------------------------
 
-    /// @notice Function that checks if any deposits have expired and if the total shares needs to be updated
-    /// @dev still in development
+    /// @notice Function that checks if any deposits have expired and manages the expirations
     function _checkForExpiredDeposits() internal {
+        // Start going over the list at the beggining
         uint256 currentId_ = getHead();
         address owner_;
 
         // See if any deposit has expired
         while (block.timestamp > deposits[currentId_].endTime && currentId_ != 0) {
-            if (_totalShares != 0){
-                _totalWeightLocked = _totalWeightLocked + (REWARDS_PER_SECOND * (deposits[currentId_].endTime- _lastMintTime))/(_totalShares);
-            } else {
-                // Theoritically impossible to reach here since for it to happen only one deposit must be present in the vault valued at zero shares would need to expire, which is not possible. This line is still left here to prevent anomalies or unforseen situations where this might happen
-                _totalWeightLocked = 0;
-            }
+            // Update weight locked according to the expiration date of the deposit that expired
+            _totalWeightLocked = _updateTotalWeightLocked(deposits[currentId_].endTime);
+
+            // Update rewards acrued by the user
             owner_ = deposits[currentId_].owner;
             rewardsAcrued[owner_] = rewardsAcrued[owner_]
                 + (_totalWeightLocked - deposits[currentId_].currentTotalWeight) * deposits[currentId_].share;
-            _totalShares = _totalShares - deposits[currentId_].share;
 
+            // Reduce total amount of shares present in the vault
+            _totalShares = _totalShares - deposits[currentId_].share;
             emit LogDepositExpired(owner_, currentId_);
-            _lastMintTime = deposits[currentId_].endTime;
+
+            // Update variables
             currentId_ = deposits[currentId_].nextId;
-            remove(0,currentId_); // the node to delete will always be the head, so there is no previousId
+
+            // Remove node - the node to delete will always be the head, so previousId = 0
+            remove(0, currentId_);
         }
     }
 
@@ -201,15 +218,25 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
         return rewardsMultiplier_;
     }
 
-    ///
-    ///
-    ///
-    function _insertNewNode(uint256 lockUpPeriod_, uint256 shares_, uint256 amountDepositedLPTokens_) internal returns (uint256) {
-        // Search list since the lastExpiredDepositShareUpdate to insert the new deposit and its end
+    /// @notice inserts a new node into the linked list according to its properties (lockUpPeriod, shares, amount of deposited lp tokens)
+    /// @param lockUpPeriod_  lock up period chosen by the user:  6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
+    /// @param shares_ amount of shares (deposited tokens * rewardsMultiplier) given to the user
+    /// @param amountDepositedLPTokens_ amount of Uniswap LPTokens deposited by the user
+    /// @return id of the deposit
+    function _insertNewNode(uint256 lockUpPeriod_, uint256 shares_, uint256 amountDepositedLPTokens_)
+        internal
+        returns (uint256)
+    {
+        // Calculate end time of the deposit
         uint256 endTime_ = _calculateEndTime(lockUpPeriod_, block.timestamp);
-        _totalWeightLocked = _updateTotalWeightLocked();
+
+        // Update total weight locked
+        _totalWeightLocked = _updateTotalWeightLocked(block.timestamp);
+
+        // Find position where to insert the node
         (uint256 previousId_, uint256 nextId_) = findPosition(endTime_, getHead());
-        // insert into list
+
+        // Create node
         ILinkedList.Node memory newNode = ILinkedList.Node({
             nextId: nextId_,
             endTime: endTime_,
@@ -218,33 +245,36 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
             owner: msg.sender,
             depositedLPTokens: amountDepositedLPTokens_
         });
+
+        // Insert the node into the list according to its position
         emit LogNode(newNode);
         return (insert(newNode, previousId_));
     }
 
-
-
-    function _updateTotalWeightLocked() internal returns(uint256 totalWeightLocked_){
-        if (_totalShares != 0){
-            totalWeightLocked_ = _totalWeightLocked + (REWARDS_PER_SECOND * (block.timestamp -  _lastMintTime))/(_totalShares);
-            emit LogUint(totalWeightLocked_);
+    /// @notice updates the total weight locked according to the time interval considered (endTimeConsidered - lastMintTime)
+    /// @param endTimeConsidered_ end time considered to define the time interval where the weight locked will be updated
+    /// @return totalWeightLocked_ resulting total weight locked
+    function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal returns (uint256 totalWeightLocked_) {
+        if (_totalShares != 0) {
+            totalWeightLocked_ =
+                _totalWeightLocked + (REWARDS_PER_SECOND * (endTimeConsidered_ - _lastMintTime)) / (_totalShares);
         } else {
             totalWeightLocked_ = 0;
         }
-        _lastMintTime = block.timestamp;
+        _lastMintTime = endTimeConsidered_;
     }
 
-
-    ///
-    ///
-    ///
+    /// @notice calculates end time that the deposit will expire according to the lock up period and the current time
+    /// @param lockUpPeriod_ lock up period chosen  6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
+    /// @param currentTime_ time where the deposit is made and from which the end time will be calculated
+    /// @return endTime_ end time where the deposit will expire according to the above mentioned variables
     function _calculateEndTime(uint256 lockUpPeriod_, uint256 currentTime_) internal pure returns (uint256 endTime_) {
         uint256 factor_;
         //TODO: implement this better
         if (lockUpPeriod_ == 6) {
             factor_ = 26;
             lockUpPeriod_ = 1;
-        }else {
+        } else {
             factor_ = 52;
         }
 
@@ -252,11 +282,6 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
         return (endTime_);
     }
 
-    function getDeposit(uint256 id_) external view returns (ILinkedList.Node memory) {
-        return (deposits[id_]);
-    }
-
     // By marking this internal function with `onlyOwner`, we only allow the owner account to authorize an upgrade
-
     function _authorizeUpgrade(address newImplementation_) internal override onlyOwner { }
 }

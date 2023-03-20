@@ -10,7 +10,7 @@ import { PoolToken } from "test/PoolToken.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 import { IVault } from "src/src-default/interfaces/IVault.sol";
 
-contract VaultTest is Test, IVault{
+contract VaultTest is Test {
     Vault vault;
     address public ownerVault = vm.addr(11);
     address public lucy = vm.addr(12);
@@ -46,8 +46,26 @@ contract VaultTest is Test, IVault{
     LZEndpointMock lzEndpoint;
     uint256 REWARDS_PER_SECOND = 317;
 
+    //-----------------------------------------------------------------------
+    //------------------------------LOGS-------------------------------------
+    //-----------------------------------------------------------------------
+    event LogUint(uint256);
+    event LogRewardsTokenMinted(address, uint256);
+    event LogNode(ILinkedList.Node);
+    event LogDepositExpired(address, uint256); // Owner and deposit id
+    event LogWithdrawHasNotExpired(uint256);
+    event LogUintArray(uint256[]);
+    event LogWithdraw(address, uint256);
     event LogAddress(address);
     event LogUintPair(uint256, uint256);
+
+    //-----------------------------------------------------------------------
+    //------------------------------ERRORS-----------------------------------
+    //-----------------------------------------------------------------------
+    error NoRewardsToClaimError();
+    error TransferOfLPTokensWasNotPossibleError();
+    error NotEnoughAmountOfTokensDepositedError();
+    error WrongLockUpPeriodError();
 
     function setUp() external {
         // Set-up the vault contract
@@ -92,7 +110,8 @@ contract VaultTest is Test, IVault{
         }
 
         //Test with an incorrect lock up period
-        vm.expectRevert();
+        vm.startPrank(lucy);
+        vm.expectRevert(WrongLockUpPeriodError.selector);
         vault.deposit(1, 3);
 
         vm.stopPrank();
@@ -144,16 +163,16 @@ contract VaultTest is Test, IVault{
         vm.warp(startTime + 27 weeks); // Lucy has expired - she will get the total awards for the first 3 months and half of the rewards for the next 3 months
         uint256 expectedRewards = (REWARDS_PER_SECOND * 13 weeks) + (REWARDS_PER_SECOND * 13 weeks) / 2;
         vm.startPrank(lucy);
-        vm.expectEmit(true,true,true,true);
-        emit LogRewardsTokenMinted(lucy,expectedRewards);
+        vm.expectEmit(true, true, true, true);
+        emit LogRewardsTokenMinted(lucy, expectedRewards);
         uint256 rewardsToClaim = vault.claimRewards(0);
         assertEq(rewardsToClaim, expectedRewards);
         vm.stopPrank();
 
         vm.warp(startTime + 53 weeks);
         vm.startPrank(julien); // at this point Julien will have half of the rewards for the initial 3 month period + all the rewards for the other 3 month period
-        vm.expectEmit(true,true,true,true);
-        emit LogRewardsTokenMinted(julien,expectedRewards);
+        vm.expectEmit(true, true, true, true);
+        emit LogRewardsTokenMinted(julien, expectedRewards);
         rewardsToClaim = vault.claimRewards(0);
         assertEq(rewardsToClaim, expectedRewards);
         vm.stopPrank();
@@ -173,52 +192,50 @@ contract VaultTest is Test, IVault{
     }
 
     function testWithdraw() external {
-        // Deposit 
+        // Deposit
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
 
         //Approve tokens to the vault
         _approveTokens(balance);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
         vm.stopPrank();
 
         // 25 out of 26 weeks go by, deposit has not expired
         vm.warp(block.timestamp + 25 weeks);
 
         vm.startPrank(lucy);
-        uint256[] memory depositsToWithdraw =  new uint256[](1);
-        depositsToWithdraw[0]= vault.ownersDepositId(lucy,0);
-        vm.expectEmit(true,true,true,true);
+        uint256[] memory depositsToWithdraw = new uint256[](1);
+        depositsToWithdraw[0] = vault.ownersDepositId(lucy, 0);
+        vm.expectEmit(true, true, true, true);
         emit LogWithdrawHasNotExpired(1);
         vault.withdraw(depositsToWithdraw);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 2 weeks); // enough time has expired
         vm.startPrank(lucy);
-        
+
         (bool success, bytes memory data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", lucy));
         uint256 balanceBefore = abi.decode(data, (uint256));
         vault.withdraw(depositsToWithdraw);
         (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", lucy));
         uint256 balanceAfter = abi.decode(data, (uint256));
         vm.stopPrank();
-        assertGt(balanceAfter,balanceBefore);
+        assertGt(balanceAfter, balanceBefore);
 
         vm.startPrank(lucy);
-        vault.deposit(5,6);
-        vault.deposit(10,1);
+        vault.deposit(5, 6);
+        vault.deposit(10, 1);
         vm.stopPrank();
 
         vm.warp(block.timestamp + 53 weeks);
         vm.startPrank(lucy);
         uint256[] memory deps; // empty array
-        vm.expectEmit(true,true,true,true);
+        vm.expectEmit(true, true, true, true);
         emit LogWithdraw(lucy, 15);
         vault.withdraw(deps);
         vm.stopPrank();
-
     }
-
 
     function testScenario1() external {
         vm.startPrank(lucy);
@@ -237,22 +254,21 @@ contract VaultTest is Test, IVault{
 
         // Both depositors lock 5 LPs for 6 months
         vm.prank(lucy);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
 
         vm.prank(julien);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
 
         vm.warp(block.timestamp + 27 weeks); // 6 months and one week go by~
-        uint256 expectedRewards = (REWARDS_PER_SECOND * 26 weeks)/2; // each user is expected to get half of the available rewards
-        
+        uint256 expectedRewards = (REWARDS_PER_SECOND * 26 weeks) / 2; // each user is expected to get half of the available rewards
+
         vm.prank(julien);
         uint256 rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewards);
+        assertEq(rewardsClaimed, expectedRewards);
 
         vm.prank(lucy);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewards);
-
+        assertEq(rewardsClaimed, expectedRewards);
     }
 
     function testScenario2() external {
@@ -272,294 +288,298 @@ contract VaultTest is Test, IVault{
 
         // Both depositors lock 5 LPs for 6 months
         vm.prank(lucy);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
 
         vm.prank(julien);
-        vault.deposit(5,1);
+        vault.deposit(5, 1);
 
         vm.warp(block.timestamp + 53 weeks); // 1 year and 1 week go by, all deposits have expired
-        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 26 weeks)/3; // Lucy gets 1/3 of the rewards available for the 6 mo period
-        uint256 expectedRewardsJulien = (2*(REWARDS_PER_SECOND * 26 weeks))/3 + (REWARDS_PER_SECOND * 26 weeks); // Julien gets 2/3 of the rewards available for the 6 mo period + totality for the other 6mo
+        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 26 weeks) / 3; // Lucy gets 1/3 of the rewards available for the 6 mo period
+        uint256 expectedRewardsJulien = (2 * (REWARDS_PER_SECOND * 26 weeks)) / 3 + (REWARDS_PER_SECOND * 26 weeks); // Julien gets 2/3 of the rewards available for the 6 mo period + totality for the other 6mo
 
         vm.prank(julien);
         uint256 rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsJulien);
+        assertEq(rewardsClaimed, expectedRewardsJulien);
 
         vm.prank(lucy);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsLucy);
+        assertEq(rewardsClaimed, expectedRewardsLucy);
     }
 
     function testScenario3() external {
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve tokens to the vault
+        //Approve tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve tokens to the vault
+        //Approve tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(phoebe);
         balance = _userGetLPTokens(phoebe);
-            //Approve  tokens to the vault
+        //Approve  tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         // Transfers
         vm.prank(lucy);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
         vm.prank(julien);
-        vault.deposit(5,1);
+        vault.deposit(5, 1);
         vm.prank(phoebe);
-        vault.deposit(5,2);
+        vault.deposit(5, 2);
 
         // 2 years and 1 week goes by -> all deposits expired
-        vm.warp(block.timestamp + 105 weeks); 
-        
+        vm.warp(block.timestamp + 105 weeks);
+
         // Lucy gets 1/7 of the rewards for the 6 mo period
-        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 26 weeks)/7; 
+        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 26 weeks) / 7;
         // Julien gets 2/7 of the rewards for the 6 mo period + 1/3 for the second 6mo
-        uint256 expectedRewardsJulien = (2*(REWARDS_PER_SECOND * 26 weeks))/7 + (REWARDS_PER_SECOND * 26 weeks)/3; 
+        uint256 expectedRewardsJulien = (2 * (REWARDS_PER_SECOND * 26 weeks)) / 7 + (REWARDS_PER_SECOND * 26 weeks) / 3;
         // Phoebe gets 4/7 of the rewards for the 6 mo period + 2/3 for the second 6mo + totality for 1 year
-        uint256 expectedRewardsPhoebe = (4*(REWARDS_PER_SECOND * 26 weeks))/7 + (2*(REWARDS_PER_SECOND * 26 weeks))/3 + (REWARDS_PER_SECOND*52 weeks);
+        uint256 expectedRewardsPhoebe = (4 * (REWARDS_PER_SECOND * 26 weeks)) / 7
+            + (2 * (REWARDS_PER_SECOND * 26 weeks)) / 3 + (REWARDS_PER_SECOND * 52 weeks);
 
         // Claim rewards and assert
         vm.prank(lucy);
         uint256 rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsLucy);
+        assertEq(rewardsClaimed, expectedRewardsLucy);
 
         vm.prank(julien);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsJulien);
+        assertEq(rewardsClaimed, expectedRewardsJulien);
 
         vm.prank(phoebe);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsPhoebe);
+        assertEq(rewardsClaimed, expectedRewardsPhoebe);
     }
 
     function testScenario4() external {
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve tokens to the vault
+        //Approve tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve  tokens to the vault
+        //Approve  tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(phoebe);
         balance = _userGetLPTokens(phoebe);
-            //Approve tokens to the vault
+        //Approve tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(dacus);
         balance = _userGetLPTokens(dacus);
-            //Approve  tokens to the vault
+        //Approve  tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         // Transfers
         vm.prank(lucy);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
         vm.prank(julien);
-        vault.deposit(5,1);
+        vault.deposit(5, 1);
         vm.prank(phoebe);
-        vault.deposit(5,2);
+        vault.deposit(5, 2);
         vm.prank(dacus);
-        vault.deposit(5,4);
+        vault.deposit(5, 4);
 
         // 4 years (208 weeks)  and 1 week goes by -> all deposits expired
-        vm.warp(block.timestamp + 209 weeks); 
-        
+        vm.warp(block.timestamp + 209 weeks);
+
         // Lucy gets 1/15 of the rewards for the 6 mo period
-        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 26 weeks)/15; 
+        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 26 weeks) / 15;
         // Julien gets 2/15 of the rewards for the 6 mo period + 1/7 for the second 6mo
-        uint256 expectedRewardsJulien = (2*(REWARDS_PER_SECOND * 26 weeks))/15 + (REWARDS_PER_SECOND * 26 weeks)/7; 
+        uint256 expectedRewardsJulien = (2 * (REWARDS_PER_SECOND * 26 weeks)) / 15 + (REWARDS_PER_SECOND * 26 weeks) / 7;
         // Phoebe gets 4/15 of the rewards for the 6 mo period + 2/7 for the second 6mo + 1/3 for 1 year
-        uint256 expectedRewardsPhoebe = (4*(REWARDS_PER_SECOND * 26 weeks))/15 + (2*(REWARDS_PER_SECOND * 26 weeks))/7 + (REWARDS_PER_SECOND*52 weeks)/3;
+        uint256 expectedRewardsPhoebe = (4 * (REWARDS_PER_SECOND * 26 weeks)) / 15
+            + (2 * (REWARDS_PER_SECOND * 26 weeks)) / 7 + (REWARDS_PER_SECOND * 52 weeks) / 3;
         // Dacus gets 8/15 of the rewards for the 6 mo period + 4/7 for the second 6mo + 2/3 for 1 year + totality for 2 years
-        uint256 expectedRewardsDacus = (8*(REWARDS_PER_SECOND * 26 weeks))/15 + (4*(REWARDS_PER_SECOND * 26 weeks))/7 + (2*(REWARDS_PER_SECOND*52 weeks))/3 + (REWARDS_PER_SECOND * 104 weeks);
+        uint256 expectedRewardsDacus = (8 * (REWARDS_PER_SECOND * 26 weeks)) / 15
+            + (4 * (REWARDS_PER_SECOND * 26 weeks)) / 7 + (2 * (REWARDS_PER_SECOND * 52 weeks)) / 3
+            + (REWARDS_PER_SECOND * 104 weeks);
 
         // Claim rewards and assert
         vm.prank(lucy);
         uint256 rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsLucy);
+        assertEq(rewardsClaimed, expectedRewardsLucy);
 
         vm.prank(julien);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsJulien);
+        assertEq(rewardsClaimed, expectedRewardsJulien);
 
         vm.prank(phoebe);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsPhoebe);
+        assertEq(rewardsClaimed, expectedRewardsPhoebe);
 
         vm.prank(dacus);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsDacus);
+        assertEq(rewardsClaimed, expectedRewardsDacus);
     }
 
     function testScenario5() external {
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve  tokens to the vault
+        //Approve  tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve  tokens to the vault
+        //Approve  tokens to the vault
         _approveTokens(balance);
-        vm.stopPrank(); 
+        vm.stopPrank();
 
         // Transfers
         vm.prank(lucy);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
         vm.warp(block.timestamp + 13 weeks); // 3 months go by
         vm.prank(julien);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
 
         // 6 months goes by -> all deposits expired
-        vm.warp(block.timestamp + 27 weeks); 
-        
-        // Both Lucy & Julien get totality of rewards for 3 mo + half for 3 mo 
-        uint256 expectedRewards = (REWARDS_PER_SECOND * 13 weeks)/2 + (REWARDS_PER_SECOND * 13 weeks); 
-        
+        vm.warp(block.timestamp + 27 weeks);
+
+        // Both Lucy & Julien get totality of rewards for 3 mo + half for 3 mo
+        uint256 expectedRewards = (REWARDS_PER_SECOND * 13 weeks) / 2 + (REWARDS_PER_SECOND * 13 weeks);
+
         // Claim rewards and assert
         vm.prank(lucy);
         uint256 rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewards);
+        assertEq(rewardsClaimed, expectedRewards);
 
         vm.prank(julien);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewards);
-
+        assertEq(rewardsClaimed, expectedRewards);
     }
 
     function testScenario6() external {
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve  tokens to the vault
+        //Approve  tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve tokens to the vault
+        //Approve tokens to the vault
         _approveTokens(balance);
-        vm.stopPrank(); 
+        vm.stopPrank();
 
         // Transfers
         vm.prank(lucy);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
         vm.warp(block.timestamp + 13 weeks); // 3 months go by
         vm.prank(julien);
-        vault.deposit(5,1);
+        vault.deposit(5, 1);
 
         // 2 years goes by -> all deposits expired
-        vm.warp(block.timestamp + 104 weeks); 
-        
-        // Lucy gets totality of rewards for 3 mo + 1/3 for 3 mo 
-        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 13 weeks) + (REWARDS_PER_SECOND * 13 weeks)/3; 
-        // Julien gets totality of rewards for 9 mo + 2/3 for 3 mo 
-        uint256 expectedRewardsJulien = (REWARDS_PER_SECOND * 39 weeks) + (2*(REWARDS_PER_SECOND * 13 weeks))/3; 
+        vm.warp(block.timestamp + 104 weeks);
+
+        // Lucy gets totality of rewards for 3 mo + 1/3 for 3 mo
+        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 13 weeks) + (REWARDS_PER_SECOND * 13 weeks) / 3;
+        // Julien gets totality of rewards for 9 mo + 2/3 for 3 mo
+        uint256 expectedRewardsJulien = (REWARDS_PER_SECOND * 39 weeks) + (2 * (REWARDS_PER_SECOND * 13 weeks)) / 3;
 
         // Claim rewards and assert
         vm.prank(lucy);
         uint256 rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsLucy);
+        assertEq(rewardsClaimed, expectedRewardsLucy);
 
         vm.prank(julien);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsJulien);
+        assertEq(rewardsClaimed, expectedRewardsJulien);
     }
 
     function testScenario7() external {
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve tokens to the vault
+        //Approve tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve  tokens to the vault
+        //Approve  tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(phoebe);
         balance = _userGetLPTokens(phoebe);
-            //Approve tokens to the vault
+        //Approve tokens to the vault
         _approveTokens(balance);
         vm.stopPrank();
 
         // Transfers
         vm.prank(lucy);
-        vault.deposit(5,6);
+        vault.deposit(5, 6);
         vm.warp(block.timestamp + 13 weeks); // 3 months go by
 
         vm.prank(julien);
-        vault.deposit(5,1); 
-        vm.warp(block.timestamp+39 weeks); // 9 months go by
+        vault.deposit(5, 1);
+        vm.warp(block.timestamp + 39 weeks); // 9 months go by
 
         vm.prank(phoebe);
-        vault.deposit(5,1);
+        vault.deposit(5, 1);
 
         // 2 years and 1 week goes by -> all deposits expired
-        vm.warp(block.timestamp + 105 weeks); 
-        
+        vm.warp(block.timestamp + 105 weeks);
+
         // Lucy gets totaly of the rewards for a 3 mo period + 1/3 for another 3 mo period
-        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 13 weeks) + ((REWARDS_PER_SECOND * 13 weeks))/3; 
+        uint256 expectedRewardsLucy = (REWARDS_PER_SECOND * 13 weeks) + ((REWARDS_PER_SECOND * 13 weeks)) / 3;
         // Julien gets 2/3 of the rewards for a 3 mo period + totality  for  6mo + half for 3 mo
-        uint256 expectedRewardsJulien = (2*(REWARDS_PER_SECOND * 13 weeks))/3 + (REWARDS_PER_SECOND * 26 weeks) + (REWARDS_PER_SECOND * 13 weeks)/2; 
+        uint256 expectedRewardsJulien = (2 * (REWARDS_PER_SECOND * 13 weeks)) / 3 + (REWARDS_PER_SECOND * 26 weeks)
+            + (REWARDS_PER_SECOND * 13 weeks) / 2;
         // Phoebe gets half of the rewards for a 3 mo period + totality for 9 mo
-        uint256 expectedRewardsPhoebe = (REWARDS_PER_SECOND * 13 weeks)/2 + (REWARDS_PER_SECOND * 39 weeks);
+        uint256 expectedRewardsPhoebe = (REWARDS_PER_SECOND * 13 weeks) / 2 + (REWARDS_PER_SECOND * 39 weeks);
 
         // Claim rewards and assert
         vm.prank(lucy);
         uint256 rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsLucy);
+        assertEq(rewardsClaimed, expectedRewardsLucy);
 
         vm.prank(julien);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsJulien);
+        assertEq(rewardsClaimed, expectedRewardsJulien);
 
         vm.prank(phoebe);
         rewardsClaimed = vault.claimRewards(0); // claim all rewards
-        assertEq(rewardsClaimed,expectedRewardsPhoebe);
+        assertEq(rewardsClaimed, expectedRewardsPhoebe);
     }
 
-    function testInvalidTransferLPTokens() external{
+    function testInvalidTransferLPTokens() external {
         vm.startPrank(lucy);
         _userGetLPTokens(lucy);
 
         // Tokens are not being approved, so deposit should fail
         vm.expectRevert(TransferOfLPTokensWasNotPossibleError.selector);
-        vault.deposit(5,1);
+        vault.deposit(5, 1);
         vm.stopPrank();
     }
 
-    function testNoRewardsToClaim() external{
+    function testNoRewardsToClaim() external {
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            
+
         //Approve and transfer tokens to the vault
         _approveTokens(balance);
 
-        // Deposit 
-        vault.deposit(5,1);
+        // Deposit
+        vault.deposit(5, 1);
 
         vm.warp(block.timestamp + 51 weeks); // not enough time has passed
 
@@ -569,28 +589,28 @@ contract VaultTest is Test, IVault{
         vm.stopPrank();
     }
 
-    function testZeroDeposit() external{
+    function testZeroDeposit() external {
         vm.startPrank(lucy);
         _userGetLPTokens(lucy);
-            
-        // Deposit 
+
+        // Deposit
         vm.expectRevert(NotEnoughAmountOfTokensDepositedError.selector);
-        vault.deposit(0,1);
+        vault.deposit(0, 1);
         vm.stopPrank();
     }
 
-    function testWithdrawScenarios() external{
+    function testWithdrawScenarios() external {
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            
+
         //Approve and transfer tokens to the vault
         _approveTokens(balance);
 
-        // Deposit 
-        vault.deposit(5,1);
+        // Deposit
+        vault.deposit(5, 1);
 
         vm.warp(block.timestamp + 51 weeks); // not enough time has passed
-        uint256[] memory depositsToWithdraw =  new uint256[](0);
+        uint256[] memory depositsToWithdraw = new uint256[](0);
         vault.withdraw(depositsToWithdraw);
 
         vm.stopPrank();
