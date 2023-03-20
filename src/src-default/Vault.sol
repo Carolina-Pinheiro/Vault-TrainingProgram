@@ -2,14 +2,14 @@
 pragma solidity ^0.8.16;
 
 import { Initializable } from "@openzeppelin-upgradeable/contracts/proxy/utils/Initializable.sol";
-import { OwnableUpgradeable } from "@openzeppelin-upgradeable/contracts/access/OwnableUpgradeable.sol";
+import { Ownable2Step } from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import { UUPSUpgradeable } from "@openzeppelin-upgradeable/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { LinkedList } from "src/src-default/LinkedList.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 import { Token } from "src/src-default/Token.sol";
 import { IVault } from "src/src-default/interfaces/IVault.sol";
 
-contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList, IVault {
+contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVault {
     //-----------------------------------------------------------------------
     //------------------------------VARIABLES--------------------------------
     //-----------------------------------------------------------------------
@@ -46,7 +46,6 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
 
     function initialize() external initializer {
         // Initialize inheritance chain
-        __Ownable_init();
         __UUPSUpgradeable_init();
     }
 
@@ -109,7 +108,7 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
         }
     }
 
-    function claimRewards(uint256 rewardsToClaim) external returns (uint256) {
+    function claimRewards(uint256 rewardsToClaim) external virtual returns (uint256) {
         // Check if any deposit has expired
         _checkForExpiredDeposits();
 

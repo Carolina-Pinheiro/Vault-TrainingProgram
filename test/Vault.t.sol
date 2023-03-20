@@ -124,9 +124,6 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
-    function _testProxy() external {
-        //TODO
-    }
 
     function testUniswapSetup() external {
         // User gets LP Tokens after depositing tokens to the pair
