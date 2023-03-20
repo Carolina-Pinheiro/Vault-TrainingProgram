@@ -48,7 +48,6 @@ contract VaultTest is Test, IVault{
 
     event LogAddress(address);
     event LogUintPair(uint256, uint256);
-    event LogWithdrawHasNotExpired(uint256);
 
     function setUp() external {
         // Set-up the vault contract
@@ -67,9 +66,8 @@ contract VaultTest is Test, IVault{
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
 
-        //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve  tokens to the vault
+        _approveTokens(balance);
 
         vault.deposit(1, 6);
         vm.stopPrank();
@@ -80,8 +78,7 @@ contract VaultTest is Test, IVault{
         uint256 balance = _userGetLPTokens(lucy);
 
         //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        _approveTokens(balance);
 
         // Test the 4 tiers
         uint8[4] memory rewardsTiers = [6, 1, 2, 4]; // 6 months, 1 year, 2 years, 4 years
@@ -110,16 +107,15 @@ contract VaultTest is Test, IVault{
         vm.startPrank(phoebe);
         uint256 balance = _userGetLPTokens(phoebe);
 
-        //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve  tokens to the vault
+        _approveTokens(balance);
 
         vm.stopPrank();
 
         // Try depositing, if the deposit is successful it's because the vault was able to transfer the tokens to itself
         vm.startPrank(address(vault));
         // Transfer the tokens to the contract
-        (success,) = LPToken.call(
+        (bool success,) = LPToken.call(
             abi.encodeWithSignature("transferFrom(address,address,uint256)", phoebe, address(vault), balance)
         );
         require(success);
@@ -131,9 +127,8 @@ contract VaultTest is Test, IVault{
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
 
-        //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve tokens to the vault
+        _approveTokens(balance);
 
         vault.deposit(100, 6);
         vm.stopPrank();
@@ -141,9 +136,8 @@ contract VaultTest is Test, IVault{
         vm.warp(startTime + 13 weeks); // 3 months
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-        //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve tokens to the vault
+        _approveTokens(balance);
         vault.deposit(100, 6);
         vm.stopPrank();
 
@@ -169,9 +163,8 @@ contract VaultTest is Test, IVault{
         vm.startPrank(phoebe);
         uint256 balance = _userGetLPTokens(phoebe);
 
-        //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve tokens to the vault
+        _approveTokens(balance);
 
         vault.deposit(20, 1);
         vault.deposit(30, 2);
@@ -184,9 +177,8 @@ contract VaultTest is Test, IVault{
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
 
-        //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve tokens to the vault
+        _approveTokens(balance);
         vault.deposit(5,6);
         vm.stopPrank();
 
@@ -203,15 +195,28 @@ contract VaultTest is Test, IVault{
 
         vm.warp(block.timestamp + 2 weeks); // enough time has expired
         vm.startPrank(lucy);
-        bytes memory data;
-        (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", lucy));
+        
+        (bool success, bytes memory data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", lucy));
         uint256 balanceBefore = abi.decode(data, (uint256));
         vault.withdraw(depositsToWithdraw);
         (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", lucy));
         uint256 balanceAfter = abi.decode(data, (uint256));
         vm.stopPrank();
         assertGt(balanceAfter,balanceBefore);
-        //assertEq()
+
+        vm.startPrank(lucy);
+        vault.deposit(5,6);
+        vault.deposit(10,1);
+        vm.stopPrank();
+
+        vm.warp(block.timestamp + 53 weeks);
+        vm.startPrank(lucy);
+        uint256[] memory deps; // empty array
+        vm.expectEmit(true,true,true,true);
+        emit LogWithdraw(lucy, 15);
+        vault.withdraw(deps);
+        vm.stopPrank();
+
     }
 
 
@@ -219,17 +224,15 @@ contract VaultTest is Test, IVault{
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
 
-        //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
 
-        //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         // Both depositors lock 5 LPs for 6 months
@@ -256,17 +259,15 @@ contract VaultTest is Test, IVault{
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
 
-        //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
 
-        //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+        //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         // Both depositors lock 5 LPs for 6 months
@@ -293,23 +294,20 @@ contract VaultTest is Test, IVault{
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(phoebe);
         balance = _userGetLPTokens(phoebe);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         // Transfers
@@ -348,30 +346,26 @@ contract VaultTest is Test, IVault{
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(phoebe);
         balance = _userGetLPTokens(phoebe);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(dacus);
         balance = _userGetLPTokens(dacus);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         // Transfers
@@ -418,16 +412,14 @@ contract VaultTest is Test, IVault{
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank(); 
 
         // Transfers
@@ -458,16 +450,14 @@ contract VaultTest is Test, IVault{
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank(); 
 
         // Transfers
@@ -499,23 +489,20 @@ contract VaultTest is Test, IVault{
         // Depositors get LPTokens
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
-            //Approve and transfer tokens to the vault
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(julien);
         balance = _userGetLPTokens(julien);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve  tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         vm.startPrank(phoebe);
         balance = _userGetLPTokens(phoebe);
-            //Approve and transfer tokens to the vault
-        (success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), balance));
-        require(success);
+            //Approve tokens to the vault
+        _approveTokens(balance);
         vm.stopPrank();
 
         // Transfers
@@ -554,6 +541,60 @@ contract VaultTest is Test, IVault{
         assertEq(rewardsClaimed,expectedRewardsPhoebe);
     }
 
+    function testInvalidTransferLPTokens() external{
+        vm.startPrank(lucy);
+        _userGetLPTokens(lucy);
+
+        // Tokens are not being approved, so deposit should fail
+        vm.expectRevert(TransferOfLPTokensWasNotPossibleError.selector);
+        vault.deposit(5,1);
+        vm.stopPrank();
+    }
+
+    function testNoRewardsToClaim() external{
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+            
+        //Approve and transfer tokens to the vault
+        _approveTokens(balance);
+
+        // Deposit 
+        vault.deposit(5,1);
+
+        vm.warp(block.timestamp + 51 weeks); // not enough time has passed
+
+        vm.expectRevert(NoRewardsToClaimError.selector);
+        vault.claimRewards(0);
+
+        vm.stopPrank();
+    }
+
+    function testZeroDeposit() external{
+        vm.startPrank(lucy);
+        _userGetLPTokens(lucy);
+            
+        // Deposit 
+        vm.expectRevert(NotEnoughAmountOfTokensDepositedError.selector);
+        vault.deposit(0,1);
+        vm.stopPrank();
+    }
+
+    function testWithdrawScenarios() external{
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+            
+        //Approve and transfer tokens to the vault
+        _approveTokens(balance);
+
+        // Deposit 
+        vault.deposit(5,1);
+
+        vm.warp(block.timestamp + 51 weeks); // not enough time has passed
+        uint256[] memory depositsToWithdraw =  new uint256[](0);
+        vault.withdraw(depositsToWithdraw);
+
+        vm.stopPrank();
+    }
 
     function _setUpUniswap() internal returns (address) {
         // Setup token contracts
@@ -606,6 +647,11 @@ contract VaultTest is Test, IVault{
         vm.label(pair, "Pair-LPTokens");
 
         return pair;
+    }
+
+    function _approveTokens(uint256 amount_) internal {
+        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), amount_));
+        require(success);
     }
 
     // Function used to give LPTokens to a user, must be preeced with startPrank

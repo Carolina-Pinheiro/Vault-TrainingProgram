@@ -77,14 +77,6 @@ contract LinkedList is ILinkedList {
         return (_getMostRecentId());
     }
 
-    function _getStartTimeOfNode(uint256 id_) internal view returns (uint256) {
-        return deposits[id_].startTime;
-    }
-
-    function _getEndTimeOfNode(uint256 id_) internal view returns (uint256) {
-        return deposits[id_].endTime;
-    }
-
     function getNextIdOfNode(uint256 id_) public view returns (uint256) {
         return deposits[id_].nextId;
     }
@@ -114,13 +106,13 @@ contract LinkedList is ILinkedList {
         }
 
         while (
-            _getEndTimeOfNode(getNextIdOfNode(currId)) < endTime // finds the nodes between which to insert
+            deposits[deposits[currId].nextId].endTime < endTime // finds the nodes between which to insert
                 && _getTail() != currId // or is at the end of the list
         ) {
-            currId = getNextIdOfNode(currId);
+            currId = deposits[currId].nextId;
         }
         uint256 previousId = currId;
-        uint256 nextId = getNextIdOfNode(currId);
+        uint256 nextId = deposits[currId].nextId;
 
         return (previousId, nextId);
     }
