@@ -5,7 +5,7 @@ import { Test } from "@forge-std/Test.sol";
 import { LinkedList } from "src/src-default/LinkedList.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 
-contract LinkedListTest is Test, ILinkedList {
+contract LinkedListTest is Test {
     LinkedList list;
     address public lucy = vm.addr(12);
     address public phoebe = vm.addr(13);
@@ -33,7 +33,7 @@ contract LinkedListTest is Test, ILinkedList {
         assertEq(previousId, 0);
         assertEq(nextId, 0);
 
-        Node memory node_ = Node({
+        ILinkedList.Node memory node_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 10,
@@ -59,7 +59,7 @@ contract LinkedListTest is Test, ILinkedList {
         uint256 endTime = 100;
         vm.startPrank(vault);
         (uint256 previousId, uint256 nextId) = list.findPosition(endTime, list.getHead());
-        Node memory newNode_ = Node({
+        ILinkedList.Node memory newNode_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 10,
@@ -73,7 +73,7 @@ contract LinkedListTest is Test, ILinkedList {
         // Insert a new node - (lock-up ends) // 1 2
         endTime = endTime + 500;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({
+        newNode_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 20,
@@ -89,7 +89,7 @@ contract LinkedListTest is Test, ILinkedList {
         // Insert a new node between both of them // 1 3 2
         endTime = endTime - 50;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({
+        newNode_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 30,
@@ -106,7 +106,7 @@ contract LinkedListTest is Test, ILinkedList {
         // Insert a new node supposed to be in the second position // 1 4 3 2
         endTime = 110;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({
+        newNode_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 40,
@@ -125,12 +125,12 @@ contract LinkedListTest is Test, ILinkedList {
     }
 
     // Test remove function
-    function testRemoveNode() external{
+    function testRemoveNode() external {
         // Insert first node - (new deposit) // 1
         uint256 endTime = 100;
         vm.startPrank(vault);
         (uint256 previousId, uint256 nextId) = list.findPosition(endTime, list.getHead());
-        Node memory newNode_ = Node({
+        ILinkedList.Node memory newNode_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 10,
@@ -144,7 +144,7 @@ contract LinkedListTest is Test, ILinkedList {
         // Insert a new node - (lock-up ends) // 1 2
         endTime = endTime + 500;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({
+        newNode_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 20,
@@ -160,7 +160,7 @@ contract LinkedListTest is Test, ILinkedList {
         // Insert a new node between both of them // 1 3 2
         endTime = endTime - 50;
         (previousId, nextId) = list.findPosition(endTime, list.getHead());
-        newNode_ = Node({
+        newNode_ = ILinkedList.Node({
             nextId: nextId,
             endTime: endTime,
             share: 30,
@@ -175,13 +175,12 @@ contract LinkedListTest is Test, ILinkedList {
         assertEq(list.getTail(), 2); // the second node is the tail
 
         // Try removing node 3 and checks that 1 is now connected to 2
-        list.remove(1,2);
+        list.remove(1, 2);
         assertEq(list.getNextIdOfNode(1), 2);
 
         // Try removing node 1 to test it work properly when previousNode = 0, node 2 will be both tail and head
-        list.remove(0,2);
-        assertEq(list.getHead(),2);
-        assertEq(list.getTail(),2);
-
+        list.remove(0, 2);
+        assertEq(list.getHead(), 2);
+        assertEq(list.getTail(), 2);
     }
 }
