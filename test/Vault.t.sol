@@ -124,7 +124,6 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
-
     function testUniswapSetup() external {
         // User gets LP Tokens after depositing tokens to the pair
         vm.startPrank(phoebe);
@@ -152,20 +151,21 @@ contract VaultTest is Test {
 
         //Approve tokens to the vault
         _approveTokens(balance);
-
-        vault.deposit(100, 6);
         vm.stopPrank();
 
-        vm.warp(startTime + 13 weeks); // 3 months
-        vm.startPrank(julien);
-        balance = _userGetLPTokens(julien);
+        vm.startPrank(phoebe);
+        balance = _userGetLPTokens(phoebe);
+
         //Approve tokens to the vault
         _approveTokens(balance);
-        vault.deposit(100, 6);
         vm.stopPrank();
+        vm.prank(lucy);
+        vault.deposit(100, 6);
 
-        vm.warp(startTime + 27 weeks); // Lucy has expired - she will get the total awards for the first 3 months and half of the rewards for the next 3 months
-        uint256 expectedRewards = (REWARDS_PER_SECOND * 13 weeks) + (REWARDS_PER_SECOND * 13 weeks) / 2;
+        vm.warp(startTime + 13 weeks); // 3 months
+
+        // try to take out rewards
+        uint256 expectedRewards = (REWARDS_PER_SECOND * 13 weeks);
         vm.startPrank(lucy);
         vm.expectEmit(true, true, true, true);
         emit LogRewardsTokenMinted(lucy, expectedRewards);
@@ -173,10 +173,33 @@ contract VaultTest is Test {
         assertEq(rewardsToClaim, expectedRewards);
         vm.stopPrank();
 
-        vm.warp(startTime + 53 weeks);
-        vm.startPrank(julien); // at this point Julien will have half of the rewards for the initial 3 month period + all the rewards for the other 3 month period
-        vm.expectEmit(true, true, true, true);
-        emit LogRewardsTokenMinted(julien, expectedRewards);
+        vm.warp(startTime + 20 weeks);
+        expectedRewards = (REWARDS_PER_SECOND * 7 weeks);
+        vm.startPrank(lucy);
+        rewardsToClaim = vault.claimRewards(0);
+        assertEq(rewardsToClaim, expectedRewards);
+        vm.stopPrank();
+
+        vm.warp(startTime + 21 weeks);
+        expectedRewards = (REWARDS_PER_SECOND * 1 weeks);
+        vm.startPrank(lucy);
+        rewardsToClaim = vault.claimRewards(0);
+        assertEq(rewardsToClaim, expectedRewards);
+        vm.stopPrank();
+
+        //  a new user deposits
+        vm.prank(phoebe);
+        vault.deposit(100, 1); // phoebe will have 2/3 of the vault power and lucy 1/3
+
+        vm.warp(startTime + 25 weeks);
+        expectedRewards = (REWARDS_PER_SECOND * 4 weeks) / 3;
+        vm.startPrank(lucy);
+        rewardsToClaim = vault.claimRewards(0);
+        assertEq(rewardsToClaim, expectedRewards);
+        vm.stopPrank();
+
+        expectedRewards = 2 * (REWARDS_PER_SECOND * 4 weeks) / 3;
+        vm.startPrank(phoebe);
         rewardsToClaim = vault.claimRewards(0);
         assertEq(rewardsToClaim, expectedRewards);
         vm.stopPrank();
@@ -575,7 +598,7 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
-    function testNoRewardsToClaim() external {
+    function testRewardsToClaimBeforeExpire() external {
         vm.startPrank(lucy);
         uint256 balance = _userGetLPTokens(lucy);
 
@@ -585,12 +608,13 @@ contract VaultTest is Test {
         // Deposit
         vault.deposit(5, 1);
 
-        vm.warp(block.timestamp + 51 weeks); // not enough time has passed
+        vm.warp(block.timestamp + 26 weeks); // not enough time has passed
 
-        vm.expectRevert(NoRewardsToClaimError.selector);
-        vault.claimRewards(0);
-
+        uint256 rewardsClaimed = vault.claimRewards(0);
         vm.stopPrank();
+
+        uint256 expectedRewards = (REWARDS_PER_SECOND * 26 weeks);
+        assertEq(rewardsClaimed, expectedRewards);
     }
 
     function testZeroDeposit() external {

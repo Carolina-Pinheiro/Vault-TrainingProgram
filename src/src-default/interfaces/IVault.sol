@@ -8,12 +8,14 @@ interface IVault is ILinkedList {
     //------------------------------LOGS-------------------------------------
     //-----------------------------------------------------------------------
     event LogUint(uint256);
+    event LogTotalWeightUpdate(uint256, uint256); // old new
     event LogRewardsTokenMinted(address, uint256);
     event LogNode(Node);
     event LogDepositExpired(address, uint256); // Owner and deposit id
     event LogWithdrawHasNotExpired(uint256);
     event LogUintArray(uint256[]);
     event LogWithdraw(address, uint256);
+    event LogRewardsAcrued(uint256);
 
     //-----------------------------------------------------------------------
     //------------------------------ERRORS-----------------------------------
