@@ -23,7 +23,7 @@ update :;
 
 # Build the project
 build :;
-	@forge build
+	forge build && FOUNDRY_PROFILE=0_6_x forge build
 
 # Format code
 format:
