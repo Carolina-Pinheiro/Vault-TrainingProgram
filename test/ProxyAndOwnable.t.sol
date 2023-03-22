@@ -11,7 +11,7 @@ import { Proxy } from "test/Proxy.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 import { VaultUpgrade } from "test/VaultUpgrade.sol";
 
-contract VaultTest is Test{
+contract VaultTest is Test {
     Vault vault;
     VaultUpgrade vaultUpgrade;
     Proxy proxy;
@@ -48,9 +48,8 @@ contract VaultTest is Test{
 
     LZEndpointMock lzEndpoint;
     uint256 REWARDS_PER_SECOND = 317;
-    
-    event LogNode(ILinkedList.Node);
 
+    event LogNode(ILinkedList.Node);
 
     function setUp() external {
         // Set-up the vault contract
@@ -73,12 +72,12 @@ contract VaultTest is Test{
         uint256 balance = _userGetLPTokens(lucy);
 
         //Approve and transfer tokens to the vault
-        _approveTokens(balance);
+        _approveTokens(balance, address(proxy));
 
         // Test call
         ILinkedList.Node memory newNode_ = ILinkedList.Node({
             nextId: 0,
-            endTime: block.timestamp+52 weeks,
+            endTime: block.timestamp + 52 weeks,
             share: 10,
             currentTotalWeight: 0,
             owner: address(lucy),
@@ -86,37 +85,29 @@ contract VaultTest is Test{
         });
         vm.expectEmit(true, true, true, true);
         emit LogNode(newNode_);
-        (bool success,) = address(proxy).call(
-            abi.encodeWithSignature("deposit(uint256,uint256)", 5,1)
-        );
-        require(success);
+        (bool success,) = address(proxy).call(abi.encodeWithSignature("deposit(uint256,uint256)", 5, 1));
+        require(success); // using SafeERC20 for IERC20
         vm.stopPrank();
     }
 
-    function testUpgradeVault() external{
+    function testUpgradeVault() external {
         // Try upgrading with another user, make sure it fails
         vaultUpgrade = new VaultUpgrade(address(LPToken));
         vm.startPrank(lucy);
         vm.expectRevert();
-        (bool success, ) = address(proxy).call(
-            abi.encodeWithSignature("upgradeTo(address)", address(vaultUpgrade))
-        );
+        (bool success,) = address(proxy).call(abi.encodeWithSignature("upgradeTo(address)", address(vaultUpgrade)));
         vm.stopPrank();
         // Try upgrading with the owner
         vm.startPrank(ownerVault);
-        (success, ) = address(proxy).call(
-            abi.encodeWithSignature("upgradeTo(address)", address(vaultUpgrade))
-        );
+        (success,) = address(proxy).call(abi.encodeWithSignature("upgradeTo(address)", address(vaultUpgrade)));
         require(success);
         vm.stopPrank();
 
         bytes memory data;
-        (success, data) = address(proxy).call(
-            abi.encodeWithSignature("claimRewards(uint256)", 20)
-        );
+        (success, data) = address(proxy).call(abi.encodeWithSignature("claimRewards(uint256)", 20));
         require(success);
         uint256 output = abi.decode(data, (uint256));
-        assertEq(output,40);
+        assertEq(output, 40);
         vm.stopPrank();
     }
 
@@ -173,9 +164,10 @@ contract VaultTest is Test{
         return pair;
     }
 
-    function _approveTokens(uint256 amount_) internal {
-        (bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", address(vault), amount_));
-        require(success);
+    function _approveTokens(uint256 amount_, address aprrover_) internal {
+        Token(address(LPToken)).approve(aprrover_, amount_);
+        //(bool success,) = LPToken.call(abi.encodeWithSignature("approve(address,uint256)", aprrover_, amount_));
+        //require(success);
     }
 
     // Function used to give LPTokens to a user, must be preeced with startPrank
