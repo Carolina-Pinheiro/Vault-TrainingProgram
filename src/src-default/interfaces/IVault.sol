@@ -35,7 +35,7 @@ interface IVault is ILinkedList {
     /// @notice Function where the user deposits the Uniswap LP tokens, chooses the lock-up period and receives LP tokens
     /// @param amount_: amount of Uniswap LP tokens to deposit
     /// @param lockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
-    function deposit(uint256 amount_, uint256 lockUpPeriod_) external;
+    function deposit(uint256 amount_, uint256 lockUpPeriod_) external payable;
 
     /// @notice  Function where the user withdraws the deposits. The list of deposits to withdraw may be chosen.
     /// @param depositsToWithdraw: list of deposits ids that the user wants to withdraw, if left empty all deposits will try to be withdrawn.
@@ -44,7 +44,7 @@ interface IVault is ILinkedList {
     /// @notice Function where the user can claim the rewards it has accrued
     /// @param rewardsToClaim: amount of rewards that the user wants to claim, if left at zero all rewards will be claimed
     /// @return rewardsToClaim: claimed rewards
-    function claimRewards(uint256 rewardsToClaim) external returns (uint256);
+    function claimRewards(uint256 rewardsToClaim) external payable returns (uint256);
 
     /// @notice getter to get info about a specific deposit - used in tests
     /// @param id_: id of the deposit
