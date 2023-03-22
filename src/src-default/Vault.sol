@@ -11,11 +11,6 @@ import { IVault } from "src/src-default/interfaces/IVault.sol";
 
 contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList, IVault {
     //-----------------------------------------------------------------------
-    //---------------------------ERRORS-& EVENTS-----------------------------
-    //-----------------------------------------------------------------------
-    error WrongLockUpPeriodError();
-
-    //-----------------------------------------------------------------------
     //------------------------------VARIABLES--------------------------------
     //-----------------------------------------------------------------------
 
@@ -27,15 +22,9 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     uint256 private _totalShares;
     Token private _rewardsToken;
     uint256 private _lastMintTime;
-    uint256 REWARDS_PER_SECOND = 317;
 
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
-
-
-    event LogWithdrawHasNotExpired(uint256);
-    event LogUintArray(uint256[]);
-    event LogWithdraw(address,uint256);
 
     constructor(address LPToken_)  initializer {
         // Set lock up period
@@ -83,17 +72,8 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
         );
         if (!success) revert TransferOfLPTokensWasNotPossibleError();
 
-        // Create a new deposit
-        Deposit memory newDeposit_ = Deposit({
-            balance: amount_,
-            share: amount_ * _getRewardsMultiplier(userLockUpPeriod_),
-            depositShareId: _getCurrentShareId(),
-            id: depositID,
-            owner: msg.sender
-        });
-        depositList[msg.sender].push(newDeposit_);
-        uint256 share = amount_ * _getRewardsMultiplier(lockUpPeriod_);
-        uint256 depositID = _insertNewNode(lockUpPeriod_, share, amount_); // new deposit
+        uint256 share = amount_ * _getRewardsMultiplier(userLockUpPeriod_);
+        depositID = _insertNewNode(userLockUpPeriod_, share, amount_); // new deposit
         ownersDepositId[msg.sender].push(depositID);
 
         // Update variables
@@ -104,30 +84,30 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     /// @notice  Function where the user withdraws the deposits
     /// @dev still in development
     /// @param depositsToWithdraw_: list of deposits ids that the user wants to withdraw, if left empty all deposits will be withdrawn
-    function withdraw(uint256[] calldata depositsToWithdraw_) external {
+    function withdraw(uint256[] memory depositsToWithdraw_) external {
         // Check if any deposit has expired
         _checkForExpiredDeposits();
 
         uint256 totalLPTokensToWithdraw_ = 0;
         // If the array if left empty, all deposits will try to be withdrawn
-        if (depositsToWithdraw.length == 0) {
-            depositsToWithdraw = ownersDepositId[msg.sender];
+        if (depositsToWithdraw_.length == 0) {
+            depositsToWithdraw_ = ownersDepositId[msg.sender];
         }
 
         // Go over depositsToWithdraw array and check if any has expired
-        for (uint256 i = 0; i < depositsToWithdraw.length; i++) {
+        for (uint256 i = 0; i < depositsToWithdraw_.length; i++) {
             // Deposit has expired and belongs to the owner
             if (
-                deposits[depositsToWithdraw[i]].endTime < block.timestamp
-                    && deposits[depositsToWithdraw[i]].owner == msg.sender
+                deposits[depositsToWithdraw_[i]].endTime < block.timestamp
+                    && deposits[depositsToWithdraw_[i]].owner == msg.sender
             ) {
                 // Sum to the total amount of tokens to withdraw
-                totalLPTokensToWithdraw_ = totalLPTokensToWithdraw_ + deposits[depositsToWithdraw[i]].depositedLPTokens;
+                totalLPTokensToWithdraw_ = totalLPTokensToWithdraw_ + deposits[depositsToWithdraw_[i]].depositedLPTokens;
 
                 // Zero out the deposits so the user may not be able to withdraw again
-                deposits[depositsToWithdraw[i]].depositedLPTokens = 0;
+                deposits[depositsToWithdraw_[i]].depositedLPTokens = 0;
             } else {
-                emit LogWithdrawHasNotExpired(depositsToWithdraw[i]);
+                emit LogWithdrawHasNotExpired(depositsToWithdraw_[i]);
             }
         }
 
@@ -145,28 +125,28 @@ contract Vault is Initializable, OwnableUpgradeable, UUPSUpgradeable, LinkedList
     /// @notice Function where the user can claim the rewards it has accrued
     /// @dev still in development
     /// @param rewardsToClaim_: amount of rewards that the user wants to claim, if left empty all rewards will be claimed
-    function claimRewards(uint256 rewardsToClaim_) external {
+    function claimRewards(uint256 rewardsToClaim_) external returns(uint256) {
         // Check if any deposit has expired
         _checkForExpiredDeposits();
 
         // If there are any rewards to claim, they will be distributed
         if (rewardsAcrued[msg.sender] > 0) {
             // If rewardsToClaim is left at zero, all rewards will be claimed
-            if (rewardsToClaim == 0) {
-                rewardsToClaim = rewardsAcrued[msg.sender];
+            if (rewardsToClaim_ == 0) {
+                rewardsToClaim_ = rewardsAcrued[msg.sender];
             }
 
             // Update total amount of rewards held by the msg.sender
-            rewardsAcrued[msg.sender] = rewardsAcrued[msg.sender] - rewardsToClaim;
+            rewardsAcrued[msg.sender] = rewardsAcrued[msg.sender] - rewardsToClaim_;
 
             // Mint rewards tokens to the user
-            _rewardsToken.mint(msg.sender, rewardsToClaim);
-            emit LogRewardsTokenMinted(msg.sender, rewardsToClaim);
+            _rewardsToken.mint(msg.sender, rewardsToClaim_);
+            emit LogRewardsTokenMinted(msg.sender, rewardsToClaim_);
         } else {
             revert NoRewardsToClaimError();
         }
 
-        return rewardsToClaim;
+        return rewardsToClaim_;
     }
 
     function getDeposit(uint256 id_) external view onlyVault returns (ILinkedList.Node memory) {

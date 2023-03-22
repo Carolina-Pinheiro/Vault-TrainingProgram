@@ -101,16 +101,18 @@ contract VaultTest is Test {
         // Test the 4 tiers
         uint8[4] memory rewardsTiers = [6, 1, 2, 4]; // 6 months, 1 year, 2 years, 4 years
         uint8[4] memory expectedRewardsMultiplier = [1, 2, 4, 8];
-        uint256 rewardsMultiplier;
-        vm.startPrank(lucy);
+        ILinkedList.Node memory node;
         for (uint256 i = 0; i < 4; i++) {
             vault.deposit(1, rewardsTiers[i]);
-            (, rewardsMultiplier,,,) = vault.depositList(lucy, i);
-            assertEq(rewardsMultiplier, expectedRewardsMultiplier[i]);
+            vm.stopPrank();
+            vm.startPrank(address(vault)); // msg sender must be vault to get deposit
+            node = vault.getDeposit(vault.ownersDepositId(lucy, i));
+            vm.stopPrank();
+            vm.startPrank(lucy);
+            assertEq(node.share, expectedRewardsMultiplier[i]);
         }
 
         //Test with an incorrect lock up period
-        vm.startPrank(lucy);
         vm.expectRevert(WrongLockUpPeriodError.selector);
         vault.deposit(1, 3);
 
