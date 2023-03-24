@@ -171,16 +171,16 @@ contract VaultTestV2 is Test {
 
         vm.warp(block.timestamp + 52 weeks);
         vm.prank(lucy);
-        vault1.deposit{ value: 1 ether }(10, 6);
+        vault1.deposit(10, 6);
 
         vm.prank(phoebe);
-        vault2.deposit{ value: 1 ether }(10, 6);
+        vault2.deposit(10, 6);
 
         vm.warp(block.timestamp + 1 weeks);
         vm.prank(lucy);
-        uint256 rewardsClaimedLucy = vault1.claimRewards{ value: 1 ether }(0);
+        uint256 rewardsClaimedLucy = vault1.claimRewards(0);
         vm.prank(phoebe);
-        uint256 rewardsClaimedPhoebe = vault2.claimRewards{ value: 1 ether }(0);
+        uint256 rewardsClaimedPhoebe = vault2.claimRewards(0);
 
         uint256 expectedRewards = (REWARDS_PER_SECOND * 1 weeks) / 2;
 
