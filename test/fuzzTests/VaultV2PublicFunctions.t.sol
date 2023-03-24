@@ -46,6 +46,8 @@ contract VaultFuzzTestPublic is Test {
     LZEndpointMock lzEndpoint1; // chainId=1
     LZEndpointMock lzEndpoint2; // chainId=2
     uint256 REWARDS_PER_SECOND = 317;
+    uint256 MAX_DEPOSIT_AMOUNT = 1000;
+    uint256 MINIMUM_TIME_TO_CLAIM = 600; // 10 minutes
 
     //-----------------------------------------------------------------------
     //------------------------------LOGS-------------------------------------
@@ -59,6 +61,7 @@ contract VaultFuzzTestPublic is Test {
     event LogWithdraw(address, uint256);
     event LogAddress(address);
     event LogUintPair(uint256, uint256);
+    event LogLockUpTimeAfterDepositAmount(uint256, uint256, uint256);
 
     //-----------------------------------------------------------------------
     //------------------------------ERRORS-----------------------------------
@@ -98,28 +101,205 @@ contract VaultFuzzTestPublic is Test {
 
     // Needed so the test contract itself can receive ether
     // when withdrawing
-    receive() external payable {}
+    receive() external payable { }
 
-    function testFuzz_deposit(uint256 amount_) public {
-        //Note: for now all lockup periods will be 1 year
-        amount_ = bound(amount_,1, 5000);
+    function testFuzz_SingleDeposit(uint256 amount_, uint256 seedLockUpPeriod_) public {
         vm.startPrank(lucy);
+        uint256 nextId = 0;
         uint256 balance = _userGetLPTokens(lucy);
+
+        //vm.assume(amount_ > 0);
+        amount_ = bound(amount_, 1, MAX_DEPOSIT_AMOUNT);
+        uint256 lockUpPeriod_ = seedLockUpPeriod_ % 6; // array com vários lockUpPeriod  [6,1,2,4,5] -> fazer o resto da divisão e limitar o resto da divisão
 
         //Approve  tokens to the vault
         _approveTokens(balance, address(vault1));
 
         // Pass some time so block.timestamp is more realistical
-        vm.warp(block.timestamp + 52 weeks);
+        uint256 time = block.timestamp + 52 weeks;
+        vm.warp(time);
 
-        // User makes two spaced out deposits in vault 1
-        vault1.deposit{ value: 0.5 ether }(amount_, 1);
+        if (lockUpPeriod_ == 6 || lockUpPeriod_ == 1 || lockUpPeriod_ == 2 || lockUpPeriod_ == 4) {
+            // User makes a deposit in vault 1
+            ILinkedList.Node memory node = ILinkedList.Node({
+                nextId: nextId,
+                endTime: _calculateEndTime(lockUpPeriod_, time),
+                share: amount_ * _getRewardsMultiplier(lockUpPeriod_),
+                depositedLPTokens: amount_,
+                currentTotalWeight: vault1.getTotalWeightLocked(),
+                owner: address(lucy)
+            });
+            vm.expectEmit(true, true, true, true);
+            emit LogNode(node);
+            vault1.deposit(amount_, lockUpPeriod_);
+        } else {
+            vm.expectRevert(WrongLockUpPeriodError.selector);
+            vault1.deposit(amount_, lockUpPeriod_);
+        }
     }
 
+    function testFuzz_SingleWithdraw(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
+        public
+    {
+        // -------------- Variables
+        timeAfterDeposit_ = bound(timeAfterDeposit_, MINIMUM_TIME_TO_CLAIM, 500 weeks);
+
+        vm.assume(seedLockUpPeriod_ > 0);
+        uint256 lockUpPeriod_ = seedLockUpPeriod_ % 6;
+
+        depositAmount_ = bound(depositAmount_, 1, MAX_DEPOSIT_AMOUNT);
+
+        bool reverted = false;
+
+        // -------------- Give and approve tokens to the user
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+        //Approve  tokens to the vault
+        _approveTokens(balance, address(vault1));
+        // Pass some time so block.timestamp is more realistic
+        vm.warp(block.timestamp + 52 weeks);
+
+        // -------------- Make a deposit
+        if (lockUpPeriod_ == 6 || lockUpPeriod_ == 1 || lockUpPeriod_ == 2 || lockUpPeriod_ == 4) {
+            // User makes a deposit in vault 1
+            ILinkedList.Node memory node = ILinkedList.Node({
+                nextId: 0,
+                endTime: _calculateEndTime(lockUpPeriod_, block.timestamp + 52 weeks),
+                share: depositAmount_ * _getRewardsMultiplier(lockUpPeriod_),
+                depositedLPTokens: depositAmount_,
+                currentTotalWeight: vault1.getTotalWeightLocked(),
+                owner: address(lucy)
+            });
+            vault1.deposit(depositAmount_, lockUpPeriod_);
+        } else {
+            reverted = true;
+        }
+        vm.stopPrank();
+
+        // -------------- Try to withdraw a deposit a random amount of time after
+        vm.warp(block.timestamp + timeAfterDeposit_);
+        uint256 lockUpTime_;
+        uint256[] memory depositsToWithdraw = new uint256[](1);
+        if (!reverted) {
+            // deposit was successful
+            depositsToWithdraw[0] = vault1.ownersDepositId(lucy, 0);
+            // -------------- Assert
+            //Note: making this with a mapping is more concise
+            if (lockUpPeriod_ == 6) {
+                lockUpTime_ = 26 weeks;
+            } else if (lockUpPeriod_ == 1) {
+                lockUpTime_ = 52 weeks;
+            } else if (lockUpPeriod_ == 2) {
+                lockUpTime_ = 104 weeks;
+            } else if (lockUpPeriod_ == 4) {
+                lockUpTime_ = 208 weeks;
+            }
+
+            if (timeAfterDeposit_ > lockUpTime_) {
+                // -------------- Enough time has passed, expect LP transfer to the user
+                vm.expectEmit(true, true, true, true);
+                emit LogWithdraw(lucy, depositAmount_);
+                vm.prank(lucy);
+                vault1.withdraw(depositsToWithdraw);
+            } else {
+                // -------------- Not enough time has passed, expect revert
+                vm.expectEmit(true, true, true, true);
+                emit LogWithdrawHasNotExpired(depositsToWithdraw[0]);
+                vm.prank(lucy);
+                vault1.withdraw(depositsToWithdraw);
+            }
+        }
+    }
+
+    function testFuzz_SingleClaimRewards(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
+        public
+    {
+        // -------------- Variables
+        timeAfterDeposit_ = bound(timeAfterDeposit_, MINIMUM_TIME_TO_CLAIM, 300 weeks); // a little bit more than 4 years as a upper bound
+
+        vm.assume(seedLockUpPeriod_ > 0);
+        uint256 lockUpPeriod_ = seedLockUpPeriod_ % 6;
+
+        depositAmount_ = bound(depositAmount_, 1, MAX_DEPOSIT_AMOUNT);
+
+        bool reverted = false;
+        // -------------- Give and approve tokens to the user
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+        //Approve  tokens to the vault
+        _approveTokens(balance, address(vault1));
+        // Pass some time so block.timestamp is more realistic
+        vm.warp(block.timestamp + 52 weeks);
+
+        // -------------- Make a deposit
+        if (lockUpPeriod_ == 6 || lockUpPeriod_ == 1 || lockUpPeriod_ == 2 || lockUpPeriod_ == 4) {
+            // User makes a deposit in vault 1
+            ILinkedList.Node memory node = ILinkedList.Node({
+                nextId: 0,
+                endTime: _calculateEndTime(lockUpPeriod_, block.timestamp + 52 weeks),
+                share: depositAmount_ * _getRewardsMultiplier(lockUpPeriod_),
+                depositedLPTokens: depositAmount_,
+                currentTotalWeight: vault1.getTotalWeightLocked(),
+                owner: address(lucy)
+            });
+            vault1.deposit(depositAmount_, lockUpPeriod_);
+        } else {
+            reverted = true;
+        }
+        vm.stopPrank();
+
+        // -------------- Try to claim it a random amount of time after
+        vm.warp(block.timestamp + timeAfterDeposit_);
+        vm.prank(lucy);
+        if (!reverted) {
+            uint256 claimedRewards_ = vault1.claimRewards(0); // try to claim all the rewards
+
+            // -------------- Assert
+            //Note: making this with a mapping somehow may be more concise
+            if (lockUpPeriod_ == 6 && timeAfterDeposit_ > 26 weeks) {
+                timeAfterDeposit_ = 26 weeks;
+            } else if (lockUpPeriod_ == 1 && timeAfterDeposit_ > 52 weeks) {
+                timeAfterDeposit_ = 52 weeks;
+            } else if (lockUpPeriod_ == 2 && timeAfterDeposit_ > 104 weeks) {
+                timeAfterDeposit_ = 104 weeks;
+            } else if (lockUpPeriod_ == 4 && timeAfterDeposit_ > 208 weeks) {
+                timeAfterDeposit_ = 208 weeks;
+            }
+            emit LogLockUpTimeAfterDepositAmount(lockUpPeriod_, timeAfterDeposit_, depositAmount_);
+            uint256 expectedRewards_ = (REWARDS_PER_SECOND) * timeAfterDeposit_;
+            emit LogUint(expectedRewards_);
+            assertEq(_similarNumbers(claimedRewards_, expectedRewards_, 5), true);
+        }
+    }
+
+    function test_similarNumber() public {
+        bool result = _similarNumbers(201, 202, 5);
+        bool expected = true;
+        assertEq(result, expected);
+
+        result = _similarNumbers(5, 20, 5);
+        expected = false;
+        assertEq(result, expected);
+
+        result = _similarNumbers(100_001, 100_011, 5);
+        expected = true;
+        assertEq(result, expected);
+
+        result = _similarNumbers(20, 21, 5);
+        expected = true;
+        assertEq(result, expected);
+
+        result = _similarNumbers(106, 100, 5);
+        expected = false;
+        assertEq(result, expected);
+
+        result = _similarNumbers(5, 6, 5);
+        expected = false;
+        assertEq(result, expected);
+    }
     // -------------------------------------------------
     // HELPER FUNCTIONS
     // ------------------------------------------------------
-
 
     function _setUpUniswap() internal returns (address) {
         // Setup token contracts
@@ -138,10 +318,10 @@ contract VaultFuzzTestPublic is Test {
         vm.stopPrank();
 
         // Give ether to all the actors
-        vm.deal(phoebe, 10*256 ether);
-        vm.deal(lucy, 10*256 ether);
-        vm.deal(julien, 10*256 ether);
-        vm.deal(dacus, 10*256 ether);
+        vm.deal(phoebe, 10 * 256 ether);
+        vm.deal(lucy, 10 * 256 ether);
+        vm.deal(julien, 10 * 256 ether);
+        vm.deal(dacus, 10 * 256 ether);
 
         // Setup Uniswap V2 contracts
         factory = deployCode("UniswapV2Factory.sol", abi.encode(address(0)));
@@ -179,6 +359,32 @@ contract VaultFuzzTestPublic is Test {
         require(success);
     }
 
+    function _similarNumbers(uint256 number1_, uint256 number2_, uint256 percentageThreshold_)
+        internal
+        returns (bool)
+    {
+        uint256 difference_;
+        uint256 biggerNumber_;
+        if (number2_ > number1_) {
+            difference_ = number2_ - number1_;
+            biggerNumber_ = number2_;
+        } else if (number1_ > number2_) {
+            difference_ = number1_ - number2_;
+            biggerNumber_ = number1_;
+        } else if (number1_ == number2_) {
+            return true;
+        }
+
+        uint256 percentage_ = (difference_ * 100) / biggerNumber_;
+        emit LogUint(percentage_);
+        if (percentage_ < percentageThreshold_) {
+            // 5 %
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     // Function used to give LPTokens to a user, must be preeced with startPrank
     function _userGetLPTokens(address user) internal returns (uint256) {
         // Wrap the ETH
@@ -210,5 +416,36 @@ contract VaultFuzzTestPublic is Test {
         assertGt(balance, 0);
 
         return balance;
+    }
+
+    function _getRewardsMultiplier(uint256 lockUpPeriod) internal pure returns (uint256) {
+        uint256 rewardsMultiplier;
+        if (lockUpPeriod == 6) {
+            rewardsMultiplier = 1;
+        } else if (lockUpPeriod == 1) {
+            rewardsMultiplier = 2;
+        } else if (lockUpPeriod == 2) {
+            rewardsMultiplier = 4;
+        } else if (lockUpPeriod == 4) {
+            rewardsMultiplier = 8;
+        } else {
+            revert WrongLockUpPeriodError();
+        }
+
+        return rewardsMultiplier;
+    }
+
+    function _calculateEndTime(uint256 lockUpPeriod_, uint256 currentTime_) internal pure returns (uint256 endTime_) {
+        uint256 factor_;
+        //TODO: implement this better
+        if (lockUpPeriod_ == 6) {
+            factor_ = 26;
+            lockUpPeriod_ = 1;
+        } else {
+            factor_ = 52;
+        }
+
+        endTime_ = lockUpPeriod_ * factor_ * 1 weeks + currentTime_;
+        return (endTime_);
     }
 }
