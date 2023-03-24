@@ -21,6 +21,9 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     uint256 private _lastMintTime;
     uint256 REWARDS_PER_SECOND = 317;
 
+    event LogFour(uint256, uint256, uint256, uint256);
+    event LogTotalShares(uint256);
+
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
 
@@ -66,7 +69,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         ownersDepositId[msg.sender].push(depositID);
 
         // Update variables
-        _totalWeightLocked = _updateTotalWeightLocked(block.timestamp);
+        _updateTotalWeightLocked(block.timestamp);
         _updateTotalShares(_totalShares + share);
     }
 
@@ -148,7 +151,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         // See if any deposit has expired
         while (block.timestamp > deposits[currentId_].endTime && currentId_ != 0) {
             // Update weight locked according to the expiration date of the deposit that expired
-            _totalWeightLocked = _updateTotalWeightLocked(deposits[currentId_].endTime);
+            _updateTotalWeightLocked(deposits[currentId_].endTime);
 
             // Update rewards acrued by the user
             owner_ = deposits[currentId_].owner;
@@ -171,11 +174,17 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     function _calculateOwnerRewardsAcrued() internal {
         address owner_ = msg.sender;
         uint256 currentId_;
-        _totalWeightLocked = _updateTotalWeightLocked(block.timestamp);
+        _updateTotalWeightLocked(block.timestamp);
         for (uint256 i = 0; i < ownersDepositId[owner_].length; i++) {
             // Update rewards acrued by the user
             currentId_ = ownersDepositId[owner_][i];
             if (deposits[currentId_].share != 0) {
+                emit LogFour(
+                    rewardsAcrued[owner_],
+                    _totalWeightLocked,
+                    deposits[currentId_].currentTotalWeight,
+                    deposits[currentId_].share
+                );
                 rewardsAcrued[owner_] = rewardsAcrued[owner_]
                     + (_totalWeightLocked - deposits[currentId_].currentTotalWeight) * deposits[currentId_].share;
                 deposits[currentId_].currentTotalWeight = _totalWeightLocked;
@@ -217,7 +226,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         uint256 endTime_ = _calculateEndTime(lockUpPeriod_, block.timestamp);
 
         // Update total weight locked
-        _totalWeightLocked = _updateTotalWeightLocked(block.timestamp);
+        _updateTotalWeightLocked(block.timestamp);
         // Find position where to insert the node
         (uint256 previousId_, uint256 nextId_) = findPosition(endTime_, getHead());
 
@@ -238,12 +247,8 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
     /// @notice updates the total weight locked according to the time interval considered (endTimeConsidered - lastMintTime)
     /// @param endTimeConsidered_ end time considered to define the time interval where the weight locked will be updated
-    /// @return totalWeightLocked_ resulting total weight locked
-    function _updateTotalWeightLocked(uint256 endTimeConsidered_)
-        internal
-        virtual
-        returns (uint256 totalWeightLocked_)
-    {
+    function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal virtual {
+        uint256 totalWeightLocked_;
         if (_totalShares != 0) {
             totalWeightLocked_ =
                 _totalWeightLocked + (REWARDS_PER_SECOND * (endTimeConsidered_ - _lastMintTime)) / (_totalShares);
@@ -251,7 +256,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
             totalWeightLocked_ = _totalWeightLocked;
         }
         _lastMintTime = endTimeConsidered_;
-        return totalWeightLocked_;
+        _setTotalWeightLocked(totalWeightLocked_);
     }
 
     /// @notice calculates end time that the deposit will expire according to the lock up period and the current time

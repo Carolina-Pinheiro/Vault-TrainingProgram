@@ -19,7 +19,13 @@ contract VaultV2 is Vault, LzApp {
         super.transferOwnership(newOwner);
     }
 
-    function updateTotalWeight(uint16 _dstChainId, uint256 newLastMintTime_, uint256 newTotalWeight_) public payable {
+    /// ---------------------------------
+    /// --- CHAIN MSG SENDER FUNCTIONS
+    /// ---------------------------------
+    function updateTotalWeight(uint16 _dstChainId, uint256 newLastMintTime_, uint256 newTotalWeight_)
+        external
+        payable
+    {
         //Note: also update totalWeightLocked
 
         // encode the payload with the new lastMintTime
@@ -41,7 +47,7 @@ contract VaultV2 is Vault, LzApp {
         );
     }
 
-    function updateTotalShares(uint16 _dstChainId, uint256 totalShares_) public payable {
+    function updateTotalShares(uint16 _dstChainId, uint256 totalShares_) external payable {
         //Note: also update totalWeightLocked
 
         // encode the payload with the new lastMintTime
@@ -63,6 +69,7 @@ contract VaultV2 is Vault, LzApp {
         );
     }
 
+    /// ---------------------------------
     function _transferOwnership(address newOwner) internal virtual override(Ownable, Ownable2Step) {
         super._transferOwnership(newOwner);
     }
@@ -92,29 +99,29 @@ contract VaultV2 is Vault, LzApp {
         }
     }
 
-    function _updateTotalWeightLocked(uint256 endTimeConsidered_)
-        internal
-        override
-        returns (uint256 totalWeightLocked_)
-    {
+    /// ---------------------------------
+    /// --- OVERIDDEN
+    function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal override {
+        uint256 totalWeightLocked_;
         if (getTotalShares() != 0) {
+            emit LogFour(getTotalWeightLocked(), endTimeConsidered_, getLastMintTime(), getTotalShares());
+
             totalWeightLocked_ = getTotalWeightLocked()
                 + (REWARDS_PER_SECOND * (endTimeConsidered_ - getLastMintTime())) / (getTotalShares());
         } else {
             totalWeightLocked_ = getTotalWeightLocked();
         }
         _setLastMintTime(endTimeConsidered_);
-        // TODO: 2 replace by chainID that should be tracked somewhere
         for (uint16 i; i < _connectedChains.length; i++) {
-            updateTotalWeight(_connectedChains[i], getLastMintTime(), totalWeightLocked_);
+            this.updateTotalWeight{ value: 0.5 ether }(_connectedChains[i], getLastMintTime(), totalWeightLocked_);
         }
-        return totalWeightLocked_;
+        _setTotalWeightLocked(totalWeightLocked_);
     }
 
     function _updateTotalShares(uint256 newTotalShares_) internal override {
         _setTotalShares(newTotalShares_);
         for (uint16 i; i < _connectedChains.length; i++) {
-            updateTotalShares(_connectedChains[i], newTotalShares_); // send info to other chain
+            this.updateTotalShares{ value: 0.5 ether }(_connectedChains[i], newTotalShares_); // send info to other chain
         }
     }
 }
