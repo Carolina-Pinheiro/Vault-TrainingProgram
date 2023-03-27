@@ -52,7 +52,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
     function deposit(uint256 amount_, uint256 lockUpPeriod_) external payable {
         if (amount_ == 0) revert NotEnoughAmountOfTokensDepositedError();
-        if (amount_ > MAX_DEPOSIT_AMOUNT) revert DepositAmountExceededError();
+        if (amount_ > 1000) revert DepositAmountExceededError(); // amount_ > MAX_DEPOSIT_AMOUNT, changed to 1000 to temporary fix an error in proxy implementation
         // Check if any deposit has expired
         _checkForExpiredDeposits();
 
