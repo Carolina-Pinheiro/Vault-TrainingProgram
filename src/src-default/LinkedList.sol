@@ -102,7 +102,7 @@ contract LinkedList is ILinkedList {
 
         while (
             deposits[deposits[currId].nextId].endTime < endTime // finds the nodes between which to insert
-                && getTail() != currId // or is at the end of the list
+                && currId != 0 // or is at the end of the list
         ) {
             currId = deposits[currId].nextId;
         }
