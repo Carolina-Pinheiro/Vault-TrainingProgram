@@ -104,8 +104,6 @@ contract VaultV2 is Vault, LzApp {
     function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal override {
         uint256 totalWeightLocked_;
         if (getTotalShares() != 0) {
-            emit LogFour(getTotalWeightLocked(), endTimeConsidered_, getLastMintTime(), getTotalShares());
-
             totalWeightLocked_ = getTotalWeightLocked()
                 + (REWARDS_PER_SECOND * (endTimeConsidered_ - getLastMintTime())) / (getTotalShares());
         } else {
