@@ -644,6 +644,66 @@ contract VaultTest is Test {
         vm.stopPrank();
     }
 
+    function testDepositsExpiring() external {
+        //------Lucy set-up
+        // Give users tokens
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+
+        //Approve and transfer tokens to the vault
+        _approveTokens(balance);
+        vm.stopPrank();
+
+        //------Julien set-up
+        vm.startPrank(julien);
+        balance = _userGetLPTokens(julien);
+
+        //Approve and transfer tokens to the vault
+        _approveTokens(balance);
+        vm.stopPrank();
+
+        //------Phoebe set-up
+        vm.startPrank(phoebe);
+        balance = _userGetLPTokens(phoebe);
+
+        //Approve and transfer tokens to the vault
+        _approveTokens(balance);
+        vm.stopPrank();
+
+        uint256 time = block.timestamp + 52 weeks;
+        // 7 deposits are made
+        vm.warp(time);
+        vm.prank(lucy);
+        vault.deposit(10, 6); // deposit 1
+
+        time = time + 1 weeks;
+        vm.warp(time);
+        vm.prank(julien);
+        vault.deposit(20, 2); // deposit 2
+
+        time = time + 2 weeks;
+        vm.warp(time);
+        vm.prank(phoebe);
+        vault.deposit(15, 2); // deposit 3
+
+        time = time + 26 weeks;
+        vm.warp(time);
+        // Deposit 0 has expired
+        vm.expectEmit(true, true, true, true);
+        emit LogDepositExpired(lucy, 1);
+        vm.prank(phoebe);
+        vault.deposit(12, 4);
+
+        time = time + 104 weeks;
+        vm.warp(time);
+        // Deposit 1 and 2 have expired
+        vm.expectEmit(true, true, true, true);
+        emit LogDepositExpired(julien, 2);
+        emit LogDepositExpired(phoebe, 3);
+        vm.prank(lucy);
+        vault.deposit(50, 4);
+    }
+
     function _setUpUniswap() internal returns (address) {
         // Setup token contracts
         weth = new WETH9();
