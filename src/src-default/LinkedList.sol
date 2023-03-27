@@ -99,15 +99,15 @@ contract LinkedList is ILinkedList {
             // the list is empty
             return (0, 0); // node will be both the head and the tail
         }
-
+        uint256 previousId = 0;
         while (
-            deposits[deposits[currId].nextId].endTime < endTime // finds the nodes between which to insert
-                && currId != 0 // or is at the end of the list
+            deposits[currId].endTime < endTime // finds the nodes between which to insert
+                && currId != 0 // getTail() != currId // or is at the end of the list
         ) {
+            previousId = currId;
             currId = deposits[currId].nextId;
         }
-        uint256 previousId = currId;
-        uint256 nextId = deposits[currId].nextId;
+        uint256 nextId = currId;
 
         return (previousId, nextId);
     }
