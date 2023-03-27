@@ -19,20 +19,25 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     uint256 private _totalShares;
     Token private immutable _rewardsToken; //immutable
     uint256 private _lastMintTime;
-    uint256 REWARDS_PER_SECOND = 317;
-    uint256 MAX_DEPOSIT_AMOUNT = 1000;
+    uint256 public constant REWARDS_PER_SECOND = 317;
+    uint256 public constant MAX_DEPOSIT_AMOUNT = 1000;
 
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
+
+    uint256[50] __gap;
 
     modifier onlyVault() {
         if (msg.sender != address(this)) revert MsgSenderIsNotVaultError();
         _;
     }
 
-    constructor(address LPToken_) initializer {
+    constructor(address LPToken_) LinkedList(){
+        // These variables can be initialized in the constructor since they are immutable
         _LPToken = LPToken_;
         _rewardsToken = new Token(address(0x0), address(this));
+        _disableInitializers();
+
     }
 
     receive() external payable { }
@@ -52,7 +57,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
     function deposit(uint256 amount_, uint256 lockUpPeriod_) external payable {
         if (amount_ == 0) revert NotEnoughAmountOfTokensDepositedError();
-        if (amount_ > 1000) revert DepositAmountExceededError(); // amount_ > MAX_DEPOSIT_AMOUNT, changed to 1000 to temporary fix an error in proxy implementation
+        if (amount_ > MAX_DEPOSIT_AMOUNT) revert DepositAmountExceededError(); 
         // Check if any deposit has expired
         _checkForExpiredDeposits();
 

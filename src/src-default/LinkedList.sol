@@ -9,7 +9,7 @@ contract LinkedList is ILinkedList {
     /// @notice The tail of the linked list.
     uint256 private _tail;
 
-    address private _vault;
+    address private immutable _vault;
 
     /**
      * @notice Maps an Id to a node.
@@ -22,6 +22,7 @@ contract LinkedList is ILinkedList {
     constructor() {
         _vault = msg.sender;
     }
+
 
     //-----------------------------------------------------------------------
     //------------------------------EXTERNAL---------------------------------

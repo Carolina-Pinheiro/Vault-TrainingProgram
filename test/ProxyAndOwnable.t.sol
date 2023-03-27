@@ -9,6 +9,7 @@ import { WETH9 } from "test/WETH9.sol";
 import { PoolToken } from "test/PoolToken.sol";
 import { Proxy } from "test/Proxy.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
+import { IVault } from "src/src-default/interfaces/IVault.sol";
 import { VaultUpgrade } from "test/VaultUpgrade.sol";
 
 contract VaultTest is Test {
@@ -85,8 +86,10 @@ contract VaultTest is Test {
         });
         vm.expectEmit(true, true, true, true);
         emit LogNode(newNode_);
-        (bool success,) = address(proxy).call(abi.encodeWithSignature("deposit(uint256,uint256)", 5, 1));
-        require(success); // using SafeERC20 for IERC20
+        
+        IVault(address(proxy)).deposit(5, 1);
+        //(bool success,) = address(proxy).call(abi.encodeWithSignature("deposit(uint256,uint256)", 5, 1));
+        //require(success); // using SafeERC20 for IERC20
         vm.stopPrank();
     }
 
