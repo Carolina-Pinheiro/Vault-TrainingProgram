@@ -49,6 +49,8 @@ contract VaultFuzzTestPublic is Test {
     uint256 MAX_DEPOSIT_AMOUNT = 1000;
     uint256 MINIMUM_TIME_TO_CLAIM = 600; // 10 minutes
 
+    mapping(address => uint256) actorsWithRewardsClaimed;
+
     //-----------------------------------------------------------------------
     //------------------------------LOGS-------------------------------------
     //-----------------------------------------------------------------------
@@ -355,6 +357,113 @@ contract VaultFuzzTestPublic is Test {
             // Wrap a random amount of time
             time = time + timeBetweenDeposits_[i_];
             vm.warp(time);
+            vm.stopPrank();
+        }
+    }
+
+    function testFuzz_Claim(
+        uint256 numberOfDeposits_,
+        uint256[100] memory seedDepositsAmount_,
+        uint256[100] memory seedLockUpPeriodList_,
+        uint256[100] memory seedTimeBetweenDeposits_,
+        address[100] memory actorsAddresses_,
+        uint256 seedAmountOfRepeatedAddresses
+    ) public {
+        // -------------- Variables
+        uint256 time = block.timestamp + 52 weeks;
+        uint256 depositId = 1;
+
+        // -------------- Fuzz test set up
+        numberOfDeposits_ = bound(numberOfDeposits_, 1, 50); // bond number of deposits
+        uint256[] memory depositsAmount_ = new uint256[](numberOfDeposits_);
+        uint256[] memory lockUpPeriodList_ = new uint256[](numberOfDeposits_);
+        uint256[] memory timeBetweenDeposits_ = new uint256[](numberOfDeposits_);
+        address[] memory Addresses_ = new address[](numberOfDeposits_);
+        uint256 actorId_;
+        uint256 amountOfRepeatedAddresses = seedAmountOfRepeatedAddresses % 49 + 1; // +1 so it never is zero, bound could be used as well
+
+        for (uint256 i_ = 0; i_ < numberOfDeposits_; i_++) {
+            depositsAmount_[i_] = seedDepositsAmount_[i_] % MAX_DEPOSIT_AMOUNT;
+            lockUpPeriodList_[i_] = seedLockUpPeriodList_[i_] % 6;
+            timeBetweenDeposits_[i_] = seedTimeBetweenDeposits_[i_] % (26 weeks);
+            actorId_ = i_ % amountOfRepeatedAddresses;
+            Addresses_[i_] = actorsAddresses_[actorId_];
+            if (Addresses_[i_] == address(0x0)) {
+                // so the zero address is not used
+                Addresses_[i_] = Addresses_[i_ - 1];
+            }
+            _actorSetUp(Addresses_[i_], address(vault1));
+            //actorsWithRewardsClaimed[Addresses_[i_]] = 0; // reset mapping
+        }
+        vm.warp(time);
+
+        // Make deposits
+        // --------------  Make various deposits
+        for (uint256 i_ = 0; i_ < depositsAmount_.length; i_++) {
+            vm.startPrank(Addresses_[i_]);
+            // -------------- Make the deposit
+            if (
+                lockUpPeriodList_[i_] == 6 || lockUpPeriodList_[i_] == 1 || lockUpPeriodList_[i_] == 2
+                    || lockUpPeriodList_[i_] == 4
+            ) {
+                // -------------- Assertions
+                if (depositsAmount_[i_] != 0) {
+                    vm.expectEmit(true, true, true, true);
+                    emit LogNewDeposit(
+                        Addresses_[i_],
+                        depositId,
+                        depositsAmount_[i_],
+                        depositsAmount_[i_] * _getRewardsMultiplier(lockUpPeriodList_[i_]),
+                        lockUpPeriodList_[i_]
+                    );
+                    depositId++;
+                } else {
+                    vm.expectRevert(NotEnoughAmountOfTokensDepositedError.selector);
+                }
+                vault1.deposit(depositsAmount_[i_], lockUpPeriodList_[i_]);
+            } else {
+                // If lock up period is wrong
+                // -------------- Assertions
+                if (depositsAmount_[i_] != 0) {
+                    vm.expectRevert(WrongLockUpPeriodError.selector);
+                } else {
+                    vm.expectRevert(NotEnoughAmountOfTokensDepositedError.selector);
+                }
+                vault1.deposit(depositsAmount_[i_], lockUpPeriodList_[i_]);
+            }
+
+            // Wrap a random amount of time
+            time = time + timeBetweenDeposits_[i_];
+            vm.warp(time);
+            vm.stopPrank();
+        }
+
+        // Try to claim
+        vm.warp(time + 2 weeks); // so every valid deposit has rewards acrued
+        uint256 rewardsClaimed;
+        // Try to claim rewards from all valid deposits
+        for (uint256 i_ = 0; i_ < Addresses_.length; i_++) {
+            vm.startPrank(Addresses_[i_]);
+            if (
+                (
+                    lockUpPeriodList_[i_] == 6 || lockUpPeriodList_[i_] == 1 || lockUpPeriodList_[i_] == 2
+                        || lockUpPeriodList_[i_] == 4
+                ) && depositsAmount_[i_] > 0 && (actorsWithRewardsClaimed[Addresses_[i_]] == 0)
+            ) {
+                // there was a valid lock up period, valid deposit and rewards have not been claimed
+                rewardsClaimed = vault1.claimRewards(0);
+                assertGt(rewardsClaimed, 0);
+                actorsWithRewardsClaimed[Addresses_[i_]] = 1;
+            }
+            vm.stopPrank();
+        }
+
+        // Try to calim rewards from all non-valid deposits (deposits had wrong lock up period, deposit amount or rewards have already been acrued)
+        // all claim rewards attempt should revert
+        for (uint256 i_ = 0; i_ < Addresses_.length; i_++) {
+            vm.startPrank(Addresses_[i_]);
+            vm.expectRevert(NoRewardsToClaimError.selector);
+            vault1.claimRewards(0);
             vm.stopPrank();
         }
     }
