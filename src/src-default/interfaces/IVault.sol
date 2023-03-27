@@ -16,6 +16,8 @@ interface IVault is ILinkedList {
     event LogUintArray(uint256[]);
     event LogWithdraw(address, uint256);
     event LogRewardsAcrued(uint256);
+    event LogUintPair(uint256, uint256);
+    event LogNewDeposit(address, uint256, uint256, uint256, uint256);
 
     //-----------------------------------------------------------------------
     //------------------------------ERRORS-----------------------------------
@@ -25,6 +27,7 @@ interface IVault is ILinkedList {
     error NotEnoughAmountOfTokensDepositedError();
     error WrongLockUpPeriodError();
     error MsgSenderIsNotVaultError();
+    error DepositAmountExceededError();
 
     //-----------------------------------------------------------------------
     //--------------------------FUNCTION-HEADERS-----------------------------

@@ -20,9 +20,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     Token private immutable _rewardsToken; //immutable
     uint256 private _lastMintTime;
     uint256 REWARDS_PER_SECOND = 317;
-
-    event LogFour(uint256, uint256, uint256, uint256);
-    event LogTotalShares(uint256);
+    uint256 MAX_DEPOSIT_AMOUNT = 1000;
 
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
@@ -54,8 +52,12 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
     function deposit(uint256 amount_, uint256 lockUpPeriod_) external payable {
         if (amount_ == 0) revert NotEnoughAmountOfTokensDepositedError();
+        if (amount_ > MAX_DEPOSIT_AMOUNT) revert DepositAmountExceededError();
         // Check if any deposit has expired
         _checkForExpiredDeposits();
+
+        // Calculate shares and check lock up period
+        uint256 share = amount_ * _getRewardsMultiplier(lockUpPeriod_);
 
         // Transfer the tokens to the contract
         (bool success,) = _LPToken.call(
@@ -64,13 +66,13 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         if (!success) revert TransferOfLPTokensWasNotPossibleError();
 
         // Create a new deposit
-        uint256 share = amount_ * _getRewardsMultiplier(lockUpPeriod_);
         uint256 depositID = _insertNewNode(lockUpPeriod_, share, amount_); // new deposit
         ownersDepositId[msg.sender].push(depositID);
 
         // Update variables
         _updateTotalWeightLocked(block.timestamp);
         _updateTotalShares(_totalShares + share);
+        emit LogNewDeposit(msg.sender, depositID, amount_, share, lockUpPeriod_);
     }
 
     function withdraw(uint256[] memory depositsToWithdraw) external {
@@ -150,6 +152,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         address owner_;
         // See if any deposit has expired
         while (block.timestamp > deposits[currentId_].endTime && currentId_ != 0) {
+            // &&
             // Update weight locked according to the expiration date of the deposit that expired
             _updateTotalWeightLocked(deposits[currentId_].endTime);
 
@@ -179,12 +182,6 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
             // Update rewards acrued by the user
             currentId_ = ownersDepositId[owner_][i];
             if (deposits[currentId_].share != 0) {
-                emit LogFour(
-                    rewardsAcrued[owner_],
-                    _totalWeightLocked,
-                    deposits[currentId_].currentTotalWeight,
-                    deposits[currentId_].share
-                );
                 rewardsAcrued[owner_] = rewardsAcrued[owner_]
                     + (_totalWeightLocked - deposits[currentId_].currentTotalWeight) * deposits[currentId_].share;
                 deposits[currentId_].currentTotalWeight = _totalWeightLocked;
@@ -255,7 +252,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         } else {
             totalWeightLocked_ = _totalWeightLocked;
         }
-        _lastMintTime = endTimeConsidered_;
+        _setLastMintTime(endTimeConsidered_);
         _setTotalWeightLocked(totalWeightLocked_);
     }
 
