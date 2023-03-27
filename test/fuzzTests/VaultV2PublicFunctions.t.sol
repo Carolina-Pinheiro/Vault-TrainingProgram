@@ -98,9 +98,9 @@ contract VaultFuzzTestPublic is Test {
         vault1 = new VaultV2(LPToken, address(lzEndpoint1));
         vault2 = new VaultV2(LPToken, address(lzEndpoint2));
         vault1.setTrustedRemoteAddress(2, abi.encodePacked(address(vault2)));
-        vault1.addConnectedChains(uint16(2));
+        vault1.addConnectedChains(uint16(2), address(vault2));
         vault2.setTrustedRemoteAddress(1, abi.encodePacked(address(vault1)));
-        vault2.addConnectedChains(uint16(1));
+        vault2.addConnectedChains(uint16(1), address(vault1));
         lzEndpoint1.setDestLzEndpoint(address(vault2), address(lzEndpoint2));
         lzEndpoint2.setDestLzEndpoint(address(vault1), address(lzEndpoint1));
         vm.stopPrank();
@@ -580,7 +580,8 @@ contract VaultFuzzTestPublic is Test {
                     vm.prank(actorsAddresses_[i_]);
                     vm.expectRevert(NoLPTokensToWithdrawError.selector);
                     vault1.withdraw(depositsToWithdraw);
-                } else { // if only some have expired, there should be deposits to withdraw and the actor's balance will increase
+                } else {
+                    // if only some have expired, there should be deposits to withdraw and the actor's balance will increase
                     (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", actorsAddresses_[i_]));
                     require(success);
                     balanceBefore = abi.decode(data, (uint256));
@@ -595,7 +596,8 @@ contract VaultFuzzTestPublic is Test {
                     assertGt(balanceAfter, balanceBefore);
                     actorsWithDeposits[actorsAddresses_[i_]] = new uint256[](0);
                 }
-            } else { // if the actor doesn't have any deposit, it will revert
+            } else {
+                // if the actor doesn't have any deposit, it will revert
                 vm.prank(actorsAddresses_[i_]);
                 vm.expectRevert(NoLPTokensToWithdrawError.selector);
                 vault1.withdraw(depositsToWithdraw);

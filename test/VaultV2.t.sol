@@ -68,6 +68,7 @@ contract VaultTestV2 is Test {
     error TransferOfLPTokensWasNotPossibleError();
     error NotEnoughAmountOfTokensDepositedError();
     error WrongLockUpPeriodError();
+    error NotTrustedChainOrAddressError();
 
     function setUp() external {
         // Set-up the vault contract
@@ -84,9 +85,9 @@ contract VaultTestV2 is Test {
         vault1 = new VaultV2(LPToken, address(lzEndpoint1));
         vault2 = new VaultV2(LPToken, address(lzEndpoint2));
         vault1.setTrustedRemoteAddress(2, abi.encodePacked(address(vault2)));
-        vault1.addConnectedChains(uint16(2));
+        vault1.addConnectedChains(uint16(2), address(vault2));
         vault2.setTrustedRemoteAddress(1, abi.encodePacked(address(vault1)));
-        vault2.addConnectedChains(uint16(1));
+        vault2.addConnectedChains(uint16(1), address(vault1));
         lzEndpoint1.setDestLzEndpoint(address(vault2), address(lzEndpoint2));
         lzEndpoint2.setDestLzEndpoint(address(vault1), address(lzEndpoint1));
         vm.stopPrank();
@@ -192,6 +193,48 @@ contract VaultTestV2 is Test {
         //uint256[] memory deps;
         //vm.prank(phoebe); // she shouldn't be able to withdraw since she has not assets in vault1
         //vault1.withdraw(deps);
+    }
+
+    function _testReceiveInfoFromTrustedSource() external {
+        // Create a vault whose chain is not trusted and address is not trusted
+        LZEndpointMock lzEndpoint3 = new LZEndpointMock(3); // chainId=3
+        LZEndpointMock lzEndpoint4 = new LZEndpointMock(4); // chainId=3
+        vm.startPrank(ownerVault);
+        VaultV2 vault3 = new VaultV2(LPToken, address(lzEndpoint3));
+        VaultV2 vault4 = new VaultV2(LPToken, address(lzEndpoint4));
+        vault4.setTrustedRemoteAddress(3, abi.encodePacked(address(vault3)));
+        vault4.addConnectedChains(uint16(3), address(vault3));
+        vault3.setTrustedRemoteAddress(4, abi.encodePacked(address(vault4)));
+        lzEndpoint3.setDestLzEndpoint(address(vault4), address(lzEndpoint4));
+        lzEndpoint4.setDestLzEndpoint(address(vault3), address(lzEndpoint3));
+
+        vault3.addConnectedChains(uint16(2), address(vault1)); // no correct chain id nor address
+
+        vm.expectRevert(NotTrustedChainOrAddressError.selector);
+        vault4.updateTotalWeight{ value: 1 ether }(3, 10, 10);
+        vm.stopPrank();
+
+        // Create a vault whose chain is trusted but address is not
+        vm.startPrank(ownerVault);
+        vault3.setTrustedRemoteAddress(4, abi.encodePacked(address(vault4)));
+        vault3.addConnectedChains(uint16(4), address(vault4));
+        vault4.setTrustedRemoteAddress(3, abi.encodePacked(address(vault3)));
+        vault4.addConnectedChains(uint16(3), address(julien)); // chain is trusted, address no
+
+        vm.expectRevert(NotTrustedChainOrAddressError.selector);
+        vault3.updateTotalWeight{ value: 1 ether }(4, 10, 10);
+        vm.stopPrank();
+
+        // Create a vault whose address is trusted but the chain is different
+        vm.startPrank(ownerVault);
+        vault3.setTrustedRemoteAddress(4, abi.encodePacked(address(vault4)));
+        vault3.addConnectedChains(uint16(4), address(vault4));
+        vault4.setTrustedRemoteAddress(3, abi.encodePacked(address(vault3)));
+        vault4.addConnectedChains(uint16(2), address(vault3));
+
+        vm.expectRevert(NotTrustedChainOrAddressError.selector);
+        vault3.updateTotalWeight{ value: 1 ether }(4, 10, 10);
+        vm.stopPrank();
     }
 
     function _setUpUniswap() internal returns (address) {

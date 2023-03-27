@@ -11,7 +11,10 @@ contract VaultV2 is Vault, LzApp {
     event LogNewMintTime(uint16, uint256); // chain src, new mint time
     event LogNewTotalShares(uint16, uint256);
 
+    error NotTrustedChainOrAddressError();
+
     uint16[] _connectedChains;
+    mapping(uint16 => mapping(address => bool)) private _trustedAddresses;
 
     constructor(address LPToken_, address lzEndpoint_) Vault(LPToken_) LzApp(lzEndpoint_) { }
 
@@ -74,16 +77,26 @@ contract VaultV2 is Vault, LzApp {
         super._transferOwnership(newOwner);
     }
 
-    function addConnectedChains(uint16 chainId_) public onlyOwner {
+    function addConnectedChains(uint16 chainId_, address srcAddress_) public onlyOwner {
         _connectedChains.push(chainId_);
+        _trustedAddresses[chainId_][srcAddress_] = true;
     }
 
-    function _blockingLzReceive(uint16 _srcChainId, bytes memory _srcAddress, uint64 _nonce, bytes memory _payload)
+    function _blockingLzReceive(uint16 _srcChainId, bytes memory srcAddress_, uint64 _nonce, bytes memory _payload)
         internal
         virtual
         override
     {
-        // TODO: something to verify the correctness of the info received and its source
+        bool trusted_ = false;
+        for (uint256 i_ = 0; i_ < _connectedChains.length; i_++) {
+            if (
+                _srcChainId == _connectedChains[i_]
+                    && _trustedAddresses[_srcChainId][address(uint160(bytes20(srcAddress_)))]
+            ) {
+                trusted_ = true;
+            }
+        }
+        if (!trusted_) revert NotTrustedChainOrAddressError();
 
         // decode the payload
         (uint256 arg1, uint256 arg2, bool isTotalWeightUpdate_) = abi.decode(_payload, (uint256, uint256, bool));
