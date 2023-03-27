@@ -28,6 +28,7 @@ interface IVault is ILinkedList {
     error WrongLockUpPeriodError();
     error MsgSenderIsNotVaultError();
     error DepositAmountExceededError();
+    error NoLPTokensToWithdrawError();
 
     //-----------------------------------------------------------------------
     //--------------------------FUNCTION-HEADERS-----------------------------

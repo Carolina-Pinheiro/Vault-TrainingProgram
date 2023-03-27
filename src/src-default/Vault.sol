@@ -110,6 +110,8 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
             );
             if (!success) revert TransferOfLPTokensWasNotPossibleError();
             emit LogWithdraw(msg.sender, totalLPTokensToWithdraw_);
+        } else {
+            revert NoLPTokensToWithdrawError();
         }
     }
 
