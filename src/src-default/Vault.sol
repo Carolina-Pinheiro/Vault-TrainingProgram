@@ -306,4 +306,8 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     function getTotalShares() public view returns (uint256) {
         return (_totalShares);
     }
+
+    function getDepositEndtime(uint256 id_) public view returns (uint256) {
+        return (deposits[id_].endTime);
+    }
 }

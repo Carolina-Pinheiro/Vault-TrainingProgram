@@ -8,6 +8,7 @@ import { LZEndpointMock } from "@layerZeroOmnichain/mocks/LZEndpointMock.sol";
 import { WETH9 } from "test/WETH9.sol";
 import { PoolToken } from "test/PoolToken.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
+import { IVault } from "src/src-default/interfaces/IVault.sol";
 
 contract VaultFuzzTestPublic is Test {
     VaultV2 vault1;
@@ -221,6 +222,7 @@ contract VaultFuzzTestPublic is Test {
                 // -------------- Not enough time has passed, expect revert
                 vm.expectEmit(true, true, true, true);
                 emit LogWithdrawHasNotExpired(depositsToWithdraw[0]);
+                vm.expectRevert(IVault.NoLPTokensToWithdrawError.selector);
                 vm.prank(lucy);
                 vault1.withdraw(depositsToWithdraw);
             }
@@ -553,29 +555,52 @@ contract VaultFuzzTestPublic is Test {
             vm.stopPrank();
         }
 
-        vm.warp(time + 210 weeks); // so all deposits have expired
+        vm.warp(time + 100 weeks); // so some deposits have expired
         uint256[] memory depositsToWithdraw;
+        uint256 notExpiredCount;
+        // Iterate through actors list
         for (uint256 i_ = 0; i_ < actorsAddresses_.length; i_++) {
+            // get deposits ids for the specific actor
             depositsToWithdraw = actorsWithDeposits[actorsAddresses_[i_]];
+
+            // check if there are deposits to withdraw
             if (depositsToWithdraw.length != 0) {
-                (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", actorsAddresses_[i_]));
-                require(success);
-                balanceBefore = abi.decode(data, (uint256));
+                // Check if some have expired or not
+                for (uint256 j_ = 0; j_ < depositsToWithdraw.length; j_++) {
+                    if (vault1.getDepositEndtime(depositsToWithdraw[j_]) > block.timestamp) {
+                        // deposit has not expired
+                        vm.expectEmit(true, true, true, true);
+                        emit LogWithdrawHasNotExpired(depositsToWithdraw[j_]);
+                        notExpiredCount++;
+                    }
+                }
 
-                vm.prank(actorsAddresses_[i_]);
-                vault1.withdraw(depositsToWithdraw);
+                // if all the deposits have not expired, it should revert with a NoLPTokensToWithdrawError
+                if (notExpiredCount == depositsToWithdraw.length) {
+                    vm.prank(actorsAddresses_[i_]);
+                    vm.expectRevert(NoLPTokensToWithdrawError.selector);
+                    vault1.withdraw(depositsToWithdraw);
+                } else { // if only some have expired, there should be deposits to withdraw and the actor's balance will increase
+                    (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", actorsAddresses_[i_]));
+                    require(success);
+                    balanceBefore = abi.decode(data, (uint256));
 
-                (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", actorsAddresses_[i_]));
-                require(success);
-                balanceAfter = abi.decode(data, (uint256));
+                    vm.prank(actorsAddresses_[i_]);
+                    vault1.withdraw(depositsToWithdraw);
 
-                assertGt(balanceAfter, balanceBefore);
-                actorsWithDeposits[actorsAddresses_[i_]] = new uint256[](0);
-            } else {
+                    (success, data) = LPToken.call(abi.encodeWithSignature("balanceOf(address)", actorsAddresses_[i_]));
+                    require(success);
+                    balanceAfter = abi.decode(data, (uint256));
+
+                    assertGt(balanceAfter, balanceBefore);
+                    actorsWithDeposits[actorsAddresses_[i_]] = new uint256[](0);
+                }
+            } else { // if the actor doesn't have any deposit, it will revert
                 vm.prank(actorsAddresses_[i_]);
                 vm.expectRevert(NoLPTokensToWithdrawError.selector);
                 vault1.withdraw(depositsToWithdraw);
             }
+            notExpiredCount = 0;
         }
     }
     // -------------------------------------------------

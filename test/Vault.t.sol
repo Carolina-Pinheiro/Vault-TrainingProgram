@@ -236,6 +236,7 @@ contract VaultTest is Test {
         depositsToWithdraw[0] = vault.ownersDepositId(lucy, 0);
         vm.expectEmit(true, true, true, true);
         emit LogWithdrawHasNotExpired(1);
+        vm.expectRevert(IVault.NoLPTokensToWithdrawError.selector);
         vault.withdraw(depositsToWithdraw);
         vm.stopPrank();
 
@@ -639,6 +640,7 @@ contract VaultTest is Test {
 
         vm.warp(block.timestamp + 51 weeks); // not enough time has passed
         uint256[] memory depositsToWithdraw = new uint256[](0);
+        vm.expectRevert(IVault.NoLPTokensToWithdrawError.selector);
         vault.withdraw(depositsToWithdraw);
 
         vm.stopPrank();
