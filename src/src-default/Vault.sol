@@ -32,12 +32,11 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         _;
     }
 
-    constructor(address LPToken_) LinkedList(){
+    constructor(address LPToken_) LinkedList() {
         // These variables can be initialized in the constructor since they are immutable
         _LPToken = LPToken_;
         _rewardsToken = new Token(address(0x0), address(this));
         _disableInitializers();
-
     }
 
     receive() external payable { }
@@ -57,12 +56,12 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
     function deposit(uint256 amount_, uint256 lockUpPeriod_) external payable {
         if (amount_ == 0) revert NotEnoughAmountOfTokensDepositedError();
-        if (amount_ > MAX_DEPOSIT_AMOUNT) revert DepositAmountExceededError(); 
+        if (amount_ > MAX_DEPOSIT_AMOUNT) revert DepositAmountExceededError();
         // Check if any deposit has expired
         _checkForExpiredDeposits();
 
         // Calculate shares and check lock up period
-        uint256 share = amount_ * _getRewardsMultiplier(lockUpPeriod_);
+        uint256 share_ = amount_ * _getRewardsMultiplier(lockUpPeriod_);
 
         // Transfer the tokens to the contract
         (bool success,) = _LPToken.call(
@@ -71,13 +70,14 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         if (!success) revert TransferOfLPTokensWasNotPossibleError();
 
         // Create a new deposit
-        uint256 depositID = _insertNewNode(lockUpPeriod_, share, amount_); // new deposit
+        (uint256 depositID, uint256 hint_, uint256 endTime_) = _insertNewNode(lockUpPeriod_, share_, amount_); // new deposit
         ownersDepositId[msg.sender].push(depositID);
 
         // Update variables
         _updateTotalWeightLocked(block.timestamp);
-        _updateTotalShares(_totalShares + share);
-        emit LogNewDeposit(msg.sender, depositID, amount_, share, lockUpPeriod_);
+        _updateTotalShares(_totalShares + share_);
+        _updateDeposit(hint_, endTime_, share_, amount_, getTotalShares(), block.timestamp, getTotalWeightLocked());
+        emit LogNewDeposit(msg.sender, depositID, amount_, share_, lockUpPeriod_);
     }
 
     function withdraw(uint256[] memory depositsToWithdraw) external {
@@ -138,6 +138,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
             _rewardsToken.mint(msg.sender, rewardsToClaim);
             emit LogRewardsTokenMinted(msg.sender, rewardsToClaim);
         } else {
+            //return 0;
             revert NoRewardsToClaimError();
         }
 
@@ -159,7 +160,6 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         address owner_;
         // See if any deposit has expired
         while (block.timestamp > deposits[currentId_].endTime && currentId_ != 0) {
-            // &&
             // Update weight locked according to the expiration date of the deposit that expired
             _updateTotalWeightLocked(deposits[currentId_].endTime);
 
@@ -174,10 +174,12 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
             emit LogDepositExpired(owner_, currentId_);
 
             // Update variables
+            uint256 actualId_ = currentId_;
             currentId_ = deposits[currentId_].nextId;
 
             // Remove node - the node to delete will always be the head, so previousId = 0
             remove(0, currentId_);
+            _updateDepositExpired(actualId_);
         }
     }
 
@@ -224,7 +226,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     /// @return id of the deposit
     function _insertNewNode(uint256 lockUpPeriod_, uint256 shares_, uint256 amountDepositedLPTokens_)
         internal
-        returns (uint256)
+        returns (uint256, uint256, uint256)
     {
         // Calculate end time of the deposit
         uint256 endTime_ = _calculateEndTime(lockUpPeriod_, block.timestamp);
@@ -246,7 +248,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
         // Insert the node into the list according to its position
         emit LogNode(newNode);
-        return (insert(newNode, previousId_));
+        return (insert(newNode, previousId_), previousId_, endTime_);
     }
 
     /// @notice updates the total weight locked according to the time interval considered (endTimeConsidered - lastMintTime)
@@ -315,4 +317,21 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     function getDepositEndtime(uint256 id_) public view returns (uint256) {
         return (deposits[id_].endTime);
     }
+
+    function getHint(uint256 endTime_) public view returns (uint256) {
+        (uint256 prev,) = findPosition(endTime_, getHead());
+        return prev;
+    }
+
+    function _updateDeposit(
+        uint256 hint_,
+        uint256 endTime_,
+        uint256 shares_,
+        uint256 amount_,
+        uint256 newTotalShares_,
+        uint256 endTimeConsidered_,
+        uint256 totalWeightLocked_
+    ) internal virtual { }
+
+    function _updateDepositExpired(uint256 idToRemove) internal virtual { }
 }

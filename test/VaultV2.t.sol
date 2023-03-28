@@ -60,6 +60,7 @@ contract VaultTestV2 is Test {
     event LogWithdraw(address, uint256);
     event LogAddress(address);
     event LogUintPair(uint256, uint256);
+    event Reason(bytes);
 
     //-----------------------------------------------------------------------
     //------------------------------ERRORS-----------------------------------
@@ -98,6 +99,10 @@ contract VaultTestV2 is Test {
         vm.deal(address(vault2), 50 ether);
     }
 
+    //-----------------------------------------------------------------------
+    //------------------------------TESTS------------------------------------
+    //-----------------------------------------------------------------------
+
     function testChangeVariablesBetweenChains() external {
         // send from v1 to v2
         vm.startPrank(lucy);
@@ -116,7 +121,7 @@ contract VaultTestV2 is Test {
         vm.stopPrank();
 
         vm.prank(ownerVault);
-        vault1.updateTotalWeight{ value: 10 ether }(2, lastMintTimeVault1, weightVault1);
+        vault1.sendMessageUpdateTotalWeight{ value: 10 ether }(2, lastMintTimeVault1, weightVault1);
 
         uint256 weightVault2 = vault2.getTotalWeightLocked();
         uint256 lastMintTimeVault2 = vault2.getLastMintTime();
@@ -195,7 +200,9 @@ contract VaultTestV2 is Test {
         //vault1.withdraw(deps);
     }
 
-    function _testReceiveInfoFromTrustedSource() external {
+    function testReceiveInfoFromTrustedSource() external {
+        // Note: emit Reason was added to the LzEndpointMock.sol contract for easier testing, thus this test will fail if the modification is not done in that contract
+
         // Create a vault whose chain is not trusted and address is not trusted
         LZEndpointMock lzEndpoint3 = new LZEndpointMock(3); // chainId=3
         LZEndpointMock lzEndpoint4 = new LZEndpointMock(4); // chainId=3
@@ -210,8 +217,9 @@ contract VaultTestV2 is Test {
 
         vault3.addConnectedChains(uint16(2), address(vault1)); // no correct chain id nor address
 
-        vm.expectRevert(NotTrustedChainOrAddressError.selector);
-        vault4.updateTotalWeight{ value: 1 ether }(3, 10, 10);
+        vm.expectEmit(true, true, true, true);
+        emit Reason(abi.encodeWithSelector(NotTrustedChainOrAddressError.selector));
+        vault4.sendMessageUpdateTotalWeight{ value: 1 ether }(3, 10, 10);
         vm.stopPrank();
 
         // Create a vault whose chain is trusted but address is not
@@ -221,22 +229,103 @@ contract VaultTestV2 is Test {
         vault4.setTrustedRemoteAddress(3, abi.encodePacked(address(vault3)));
         vault4.addConnectedChains(uint16(3), address(julien)); // chain is trusted, address no
 
-        vm.expectRevert(NotTrustedChainOrAddressError.selector);
-        vault3.updateTotalWeight{ value: 1 ether }(4, 10, 10);
+        vm.expectEmit(true, true, true, true);
+        emit Reason(abi.encodeWithSelector(NotTrustedChainOrAddressError.selector));
+        vault3.sendMessageUpdateTotalWeight{ value: 1 ether }(4, 10, 10);
         vm.stopPrank();
 
-        // Create a vault whose address is trusted but the chain is different
-        vm.startPrank(ownerVault);
-        vault3.setTrustedRemoteAddress(4, abi.encodePacked(address(vault4)));
-        vault3.addConnectedChains(uint16(4), address(vault4));
-        vault4.setTrustedRemoteAddress(3, abi.encodePacked(address(vault3)));
-        vault4.addConnectedChains(uint16(2), address(vault3));
-
-        vm.expectRevert(NotTrustedChainOrAddressError.selector);
-        vault3.updateTotalWeight{ value: 1 ether }(4, 10, 10);
-        vm.stopPrank();
+        // Create a vault whose address is trusted but the chain is different - will fail but due to the LzApp implementation
     }
 
+    function testNewDepositInOtherVault() external {
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+
+        //Approve  tokens to the vault
+        _approveTokens(balance, address(vault1));
+        _approveTokens(balance, address(vault2));
+        vm.stopPrank();
+
+        vm.startPrank(phoebe);
+        balance = _userGetLPTokens(phoebe);
+
+        //Approve  tokens to the vault
+        _approveTokens(balance, address(vault1));
+        _approveTokens(balance, address(vault2));
+        vm.stopPrank();
+
+        vm.startPrank(julien);
+        balance = _userGetLPTokens(julien);
+
+        //Approve  tokens to the vault
+        _approveTokens(balance, address(vault1));
+        _approveTokens(balance, address(vault2));
+        vm.stopPrank();
+        // Pass some time so block.timestamp is more realistical
+        vm.warp(block.timestamp + 52 weeks);
+
+        // User makes two spaced out deposits in vault 1
+        vm.prank(lucy);
+        vault1.deposit{ value: 1 ether }(10, 6);
+
+        vm.warp(block.timestamp + 1 weeks);
+
+        uint256 recentId = vault2.getMostRecentId();
+        emit LogNode(vault2.getNode(recentId));
+
+        vm.prank(julien);
+        vault2.deposit{ value: 1 ether }(10, 1); // will end after so 1-> 2
+
+        recentId = vault2.getMostRecentId();
+        assertEq(vault2.getNode(1).nextId, 2); // node 2 of vault2 is connected to node 1
+        vm.warp(block.timestamp + 2);
+
+        // node from vault 1 in between
+        vm.prank(phoebe);
+        vault2.deposit{ value: 1 ether }(10, 6); // 1 -> 3 -> 2
+
+        assertEq(vault2.getHead(), 1);
+        assertEq(vault2.getNode(1).nextId, 3);
+        assertEq(vault2.getNode(3).nextId, 2);
+        assertEq(vault2.getTail(), 2);
+
+        assertEq(vault1.getHead(), 1);
+        assertEq(vault1.getNode(1).nextId, 3);
+        assertEq(vault1.getNode(3).nextId, 2);
+        assertEq(vault1.getTail(), 2);
+        assertEq(vault1.getNode(2).owner, address(0x0));
+
+        assertEq(vault1.getNode(1).endTime, vault2.getNode(1).endTime);
+        assertEq(vault1.getNode(1).currentTotalWeight, vault2.getNode(1).currentTotalWeight);
+
+        assertEq(vault1.getNode(2).endTime, vault2.getNode(2).endTime);
+        assertEq(vault1.getNode(2).currentTotalWeight, vault2.getNode(2).currentTotalWeight);
+
+        assertEq(vault1.getNode(3).endTime, vault2.getNode(3).endTime);
+        assertEq(vault1.getNode(3).currentTotalWeight, vault2.getNode(3).currentTotalWeight);
+
+        assertEq(vault1.getTotalWeightLocked(), vault2.getTotalWeightLocked());
+        assertEq(vault1.getLastMintTime(), vault2.getLastMintTime());
+        assertEq(vault1.getTotalShares(), vault2.getTotalShares());
+
+        vm.warp(block.timestamp + 27 weeks); // both deposits have expired
+        vm.prank(phoebe);
+        vm.expectRevert(NoRewardsToClaimError.selector);
+        vault1.claimRewards(0);
+
+        vm.prank(phoebe);
+        uint256 rewardsClaimedPhoebe = vault2.claimRewards(0); // claimed deposit
+
+        vm.prank(lucy);
+        uint256 rewardsClaimedLucy = vault1.claimRewards(0); // claimed deposit
+
+        emit LogUintPair(rewardsClaimedPhoebe, rewardsClaimedLucy);
+        assert(_similarNumbers(rewardsClaimedPhoebe, rewardsClaimedLucy, 10));
+    }
+
+    //-----------------------------------------------------------------------
+    //------------------------------HELPERS----------------------------------
+    //-----------------------------------------------------------------------
     function _setUpUniswap() internal returns (address) {
         // Setup token contracts
         weth = new WETH9();
@@ -326,5 +415,31 @@ contract VaultTestV2 is Test {
         assertGt(balance, 0);
 
         return balance;
+    }
+
+    function _similarNumbers(uint256 number1_, uint256 number2_, uint256 percentageThreshold_)
+        internal
+        returns (bool)
+    {
+        uint256 difference_;
+        uint256 biggerNumber_;
+        if (number2_ > number1_) {
+            difference_ = number2_ - number1_;
+            biggerNumber_ = number2_;
+        } else if (number1_ > number2_) {
+            difference_ = number1_ - number2_;
+            biggerNumber_ = number1_;
+        } else if (number1_ == number2_) {
+            return true;
+        }
+
+        uint256 percentage_ = (difference_ * 100) / biggerNumber_;
+        emit LogUint(percentage_);
+        if (percentage_ < percentageThreshold_) {
+            // 5 %
+            return true;
+        } else {
+            return false;
+        }
     }
 }
