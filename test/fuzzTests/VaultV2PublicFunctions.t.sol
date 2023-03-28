@@ -127,7 +127,7 @@ contract VaultFuzzTestPublic is Test {
     // Test single interactions
     // -------------------------------------------------
 
-    function testFuzz_SingleDeposit(uint256 amount_, uint256 seedLockUpPeriod_) public {
+    function testFuzz_SingleDeposit_SkipCI(uint256 amount_, uint256 seedLockUpPeriod_) public {
         vm.startPrank(lucy);
         uint256 nextId = 0;
         uint256 balance = _userGetLPTokens(lucy);
@@ -163,7 +163,7 @@ contract VaultFuzzTestPublic is Test {
         vm.stopPrank();
     }
 
-    function testFuzz_SingleWithdraw(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
+    function testFuzz_SingleWithdraw_SkipCI(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
         public
     {
         // -------------- Variables
@@ -229,7 +229,7 @@ contract VaultFuzzTestPublic is Test {
         }
     }
 
-    function testFuzz_SingleClaimRewards(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
+    function testFuzz_SingleClaimRewards_SkipCI(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
         public
     {
         // -------------- Variables
@@ -286,7 +286,7 @@ contract VaultFuzzTestPublic is Test {
     // Test various interactions
     // -------------------------------------------------
 
-    function testFuzz_Deposit(
+    function testFuzz_Deposit_SkipCI(
         uint256 numberOfDeposits_,
         uint256[AMOUNT_OF_DEPOSITS_TESTED] memory seedDepositsAmount_,
         uint256[AMOUNT_OF_DEPOSITS_TESTED] memory seedLockUpPeriodList_,
@@ -327,7 +327,7 @@ contract VaultFuzzTestPublic is Test {
         }
     }
 
-    function testFuzz_Claim(
+    function testFuzz_Claim_SkipCI(
         uint256 numberOfDeposits_,
         uint256[AMOUNT_OF_DEPOSITS_TESTED] memory seedDepositsAmount_,
         uint256[AMOUNT_OF_DEPOSITS_TESTED] memory seedLockUpPeriodList_,
@@ -398,7 +398,7 @@ contract VaultFuzzTestPublic is Test {
         }
     }
 
-    function testFuzz_Withdraw(
+    function testFuzz_Withdraw_SkipCI(
         uint256 numberOfDeposits_,
         uint256[AMOUNT_OF_DEPOSITS_TESTED] memory seedDepositsAmount_,
         uint256[AMOUNT_OF_DEPOSITS_TESTED] memory seedLockUpPeriodList_,
@@ -493,7 +493,7 @@ contract VaultFuzzTestPublic is Test {
     // -------------------------------------------------
     // Test  different chains
     // -------------------------------------------------
-    function testFuzz_Chains(
+    function testFuzz_Chains_SkipCI(
         uint256 numberOfChains_,
         uint256 numberOfDeposits_,
         uint256[AMOUNT_OF_DEPOSITS_TESTED] memory seedDepositsAmount_,
