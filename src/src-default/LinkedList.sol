@@ -23,7 +23,6 @@ contract LinkedList is ILinkedList {
         _vault = msg.sender;
     }
 
-
     //-----------------------------------------------------------------------
     //------------------------------EXTERNAL---------------------------------
     //-----------------------------------------------------------------------
@@ -93,8 +92,8 @@ contract LinkedList is ILinkedList {
 
     /// @notice Finds the position of a new node based on the endTime
     /// @return (previousId, nextId) the previous id and the next id where the node will be inserted
-    function findPosition(uint256 endTime, uint256 firstIdToSearch) public view returns (uint256, uint256) {
-        uint256 currId = firstIdToSearch;
+    function findPosition(uint256 endTime, uint256 hint) public view returns (uint256, uint256) {
+        uint256 currId = hint;
 
         if (_id == 0) {
             // the list is empty
