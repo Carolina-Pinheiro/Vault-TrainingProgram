@@ -39,6 +39,10 @@ contract VaultV2 is Vault, LzApp {
     /// ---------------------------------
     /// --- CHAIN MSG SENDER FUNCTIONS
     /// ---------------------------------
+    /// @notice updates totalWeightLocked in a specific chain
+    /// @param _dstChainId destination chain
+    /// @param newLastMintTime_ updated last mint time, must be updated when totalWeightLocked is updated
+    /// @param newTotalWeight_ new total weight locked
     function sendMessageUpdateTotalWeight(uint16 _dstChainId, uint256 newLastMintTime_, uint256 newTotalWeight_)
         external
         payable
@@ -65,6 +69,9 @@ contract VaultV2 is Vault, LzApp {
         );
     }
 
+    /// @notice updates totalShares in a specific chain
+    /// @param _dstChainId destination chain
+    /// @param totalShares_ new totalShares to update
     function sendMessageUpdateTotalShares(uint16 _dstChainId, uint256 totalShares_) external payable {
         depositInfo memory newDeposit_;
         // encode the payload with the new totalShares
@@ -86,23 +93,17 @@ contract VaultV2 is Vault, LzApp {
         );
     }
 
-    function sendMessageDeposit(uint256 i, bytes memory payload, bytes memory adapterParams) external payable {
+    /// @notice send message to update or remove new deposit according to the payload
+    /// @param _dstChainId destination chain
+    /// @param payload contains the info of the deposit
+    /// @param adapterParams parameters of the message
+    function sendMessageDeposit(uint16 _dstChainId, bytes memory payload, bytes memory adapterParams)
+        external
+        payable
+    {
         // send LayerZero message
         _lzSend( // {value: messageFee} will be paid out of this contract!
-            _connectedChains[i], // destination chainId
-            payload, // abi.encode()'ed bytes
-            payable(msg.sender), //payable(this), // (msg.sender will be this contract) refund address (LayerZero will refund any extra gas back to caller of send()
-            address(0x0), // future param, unused for this example
-            adapterParams, // v1 adapterParams, specify custom destination gas qty
-            msg.value
-        );
-        emit LogMessageSentToChain(_connectedChains[i]);
-    }
-
-    function sendMessageRemoveDeposit(uint256 i, bytes memory payload, bytes memory adapterParams) external payable {
-        // send LayerZero message
-        _lzSend( // {value: messageFee} will be paid out of this contract!
-            _connectedChains[i], // destination chainId
+            _dstChainId, // destination chainId
             payload, // abi.encode()'ed bytes
             payable(msg.sender), //payable(this), // (msg.sender will be this contract) refund address (LayerZero will refund any extra gas back to caller of send()
             address(0x0), // future param, unused for this example
@@ -112,8 +113,124 @@ contract VaultV2 is Vault, LzApp {
     }
 
     /// ---------------------------------
+    /// --- OVERIDDEN
+
+    /// @notice called when a deposit is created in this vault. Sends message to the other vaults to add the new deposit but with zero address
+    /// @param hint_ hint of where to insert the new deposit
+    /// @param endTime_ expiration time of the new deposit
+    /// @param shares_ amount of shares of the deposit
+    /// @param amount_ amount of tokens deposited
+    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_) internal override {
+        // NOTE CAN BE IMPROVED TO BE MORE EFFIECNT USING THE HINT
+        depositInfo memory newDeposit_ =
+            depositInfo({ hint: hint_, endTime: endTime_, shares: shares_, amount: amount_ });
+        // encode the payload with the new totalShares
+        bytes memory payload = abi.encode(0, 0, newDeposit_, 3);
+
+        // use adapterParams v1 to specify more gas for the destination
+        uint16 version = 1;
+        uint256 gasForDestinationLzReceive = 350_000;
+        bytes memory adapterParams = abi.encodePacked(version, gasForDestinationLzReceive);
+
+        for (uint16 i = 0; i < _connectedChains.length; i++) {
+            this.sendMessageDeposit{ value: 0.5 ether }(_connectedChains[i], payload, adapterParams);
+        }
+    }
+
+    /// @notice called when a deposit expires according to the present vault. Sends message to the other vaults to remove the expired deposit
+    /// @param idToRemove the id of the expired deposit that will be removed across all chains
+    function _updateDepositExpired(uint256 idToRemove) internal override {
+        // encode the payload with the new totalShares
+        depositInfo memory newDeposit_;
+
+        bytes memory payload = abi.encode(idToRemove, 0, newDeposit_, 4);
+
+        // use adapterParams v1 to specify more gas for the destination
+        uint16 version = 1;
+        uint256 gasForDestinationLzReceive = 350_000;
+        bytes memory adapterParams = abi.encodePacked(version, gasForDestinationLzReceive);
+
+        for (uint16 i = 0; i < _connectedChains.length; i++) {
+            this.sendMessageDeposit{ value: 0.5 ether }(_connectedChains[i], payload, adapterParams);
+        }
+    }
+
+    /// ---------------------------------
+    /// --- Internal
+    /// ---------------------------------
+    /// @notice called when a message is received that a deposit is created in another vault and is then propagated to this vault.
+    /// @param hint_ hint of where to insert the new deposit
+    /// @param endTime_ expiration time of the new deposit
+    /// @param shares_ amount of shares of the deposit
+    /// @param amount_ amount of tokens deposited
+    function _addExternalDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_) internal {
+        // Find position where to insert the node
+        _updateTotalWeightLocked(block.timestamp);
+        (uint256 previousId_, uint256 nextId_) = findPosition(endTime_, getHead()); //hint_
+
+        // Create node
+        Node memory newNode = Node({
+            nextId: nextId_,
+            endTime: endTime_,
+            share: shares_,
+            currentTotalWeight: getTotalWeightLocked(),
+            owner: address(0x0), // the deposit does not belong to this vault, so the owner will be zero
+            depositedLPTokens: amount_
+        });
+
+        // Insert the node into the list according to its position
+        insert(newNode, previousId_);
+        _updateTotalShares(getTotalShares() + shares_);
+        // Print List
+        uint256 id = getHead();
+        while (id != 0) {
+            emit LogNodeLL(deposits[id]);
+            id = deposits[id].nextId;
+        }
+    }
+
+    /// @notice called when a message is received that a deposit expired in another vault
+    /// @param id_ the id of the expired deposit that will be removed across all chains
+    function _removeExternalDeposit(uint256 id_) internal {
+        // Start going over the list at the beggining
+        address owner_;
+        // See if any deposit has expired
+        // Update weight locked according to the expiration date of the deposit that expired
+        _updateTotalWeightLocked(deposits[id_].endTime);
+
+        // Update rewards acrued by the user
+        owner_ = deposits[id_].owner;
+        if (owner_ != address(0x0)) {
+            rewardsAcrued[owner_] = rewardsAcrued[owner_]
+                + (getTotalWeightLocked() - deposits[id_].currentTotalWeight) * deposits[id_].share;
+            emit LogRewardsAcrued(rewardsAcrued[owner_]);
+        }
+        // Reduce total amount of shares present in the vault
+        _updateTotalShares(getTotalShares() - deposits[id_].share);
+        deposits[id_].share = 0;
+        emit LogDepositExpired(owner_, id_);
+
+        // Remove node - the node to delete will always be the head, so previousId = 0
+        remove(0, deposits[id_].nextId);
+
+        // Print List
+        uint256 id = getHead();
+        while (id != 0) {
+            emit LogNodeLL(deposits[id]);
+            id = deposits[id].nextId;
+        }
+    }
+
+    /// @notice called when a message is received that a deposit expired in another vault
+    /// @param newOwner new owner of the vault contract
+    function _transferOwnership(address newOwner) internal virtual override(Ownable, Ownable2Step) {
+        super._transferOwnership(newOwner);
+    }
+
+    /// ---------------------------------
     /// --- Receiver message from other chains
-    function _blockingLzReceive(uint16 _srcChainId, bytes memory srcAddress_, uint64 _nonce, bytes memory _payload)
+    /// @notice called when a message is received from other contracts integrated in lz endpoints
+    function _blockingLzReceive(uint16 _srcChainId, bytes memory srcAddress_, uint64, bytes memory _payload)
         internal
         virtual
         override
@@ -148,151 +265,18 @@ contract VaultV2 is Vault, LzApp {
     }
 
     /// ---------------------------------
-    /// --- OVERIDDEN
-    function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal override {
-        uint256 totalWeightLocked_;
-        if (getTotalShares() != 0) {
-            totalWeightLocked_ = getTotalWeightLocked()
-                + (REWARDS_PER_SECOND * (endTimeConsidered_ - getLastMintTime())) / (getTotalShares());
-        } else {
-            totalWeightLocked_ = getTotalWeightLocked();
-        }
-        _setLastMintTime(endTimeConsidered_);
-
-        /*for (uint16 i = 0; i < _connectedChains.length; i++) {
-            this.updateTotalWeight{ value: 0.5 ether }(_connectedChains[i], endTimeConsidered_, totalWeightLocked_);
-        }*/
-        _setTotalWeightLocked(totalWeightLocked_);
-    }
-
-    function _updateTotalShares(uint256 newTotalShares_) internal override {
-        _setTotalShares(newTotalShares_);
-        /*for (uint16 i = 0; i < _connectedChains.length; i++) {
-            this.updateTotalShares{ value: 0.5 ether }(_connectedChains[i], newTotalShares_); // send info to other chain
-        }*/
-    }
-
-    function _updateDeposit(
-        uint256 hint_,
-        uint256 endTime_,
-        uint256 shares_,
-        uint256 amount_,
-        uint256 newTotalShares_,
-        uint256 endTimeConsidered_,
-        uint256 totalWeightLocked_
-    ) internal override {
-        depositInfo memory newDeposit_ =
-            depositInfo({ hint: hint_, endTime: endTime_, shares: shares_, amount: amount_ });
-        // encode the payload with the new totalShares
-        bytes memory payload = abi.encode(0, 0, newDeposit_, 3);
-
-        // use adapterParams v1 to specify more gas for the destination
-        uint16 version = 1;
-        uint256 gasForDestinationLzReceive = 350_000;
-        bytes memory adapterParams = abi.encodePacked(version, gasForDestinationLzReceive);
-
-        for (uint16 i = 0; i < _connectedChains.length; i++) {
-            /*
-            this.sendMessageUpdateTotalWeight{ value: 0.5 ether }(
-                _connectedChains[i], endTimeConsidered_, totalWeightLocked_
-            );*/
-            this.sendMessageDeposit{ value: 0.5 ether }(i, payload, adapterParams);
-            //this.sendMessageUpdateTotalShares{ value: 0.5 ether }(_connectedChains[i], newTotalShares_);
-        }
-    }
-
-    function _updateDepositExpired(uint256 idToRemove) internal override {
-        // encode the payload with the new totalShares
-        depositInfo memory newDeposit_;
-
-        bytes memory payload = abi.encode(idToRemove, 0, newDeposit_, 4);
-
-        // use adapterParams v1 to specify more gas for the destination
-        uint16 version = 1;
-        uint256 gasForDestinationLzReceive = 350_000;
-        bytes memory adapterParams = abi.encodePacked(version, gasForDestinationLzReceive);
-
-        for (uint16 i = 0; i < _connectedChains.length; i++) {
-            //this.sendMessageUpdateTotalWeight{ value: 0.5 ether }(
-            //    _connectedChains[i], lastMintTime_, totalWeightLocked_
-            //);
-            this.sendMessageRemoveDeposit{ value: 0.5 ether }(i, payload, adapterParams);
-            //this.sendMessageUpdateTotalShares{ value: 0.5 ether }(_connectedChains[i], totalShares);
-        }
-    }
-
-    /// ---------------------------------
-    /// --- Internal
-    /// ---------------------------------
-    function _addExternalDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_) internal {
-        // Find position where to insert the node
-        _updateTotalWeightLocked(block.timestamp);
-        (uint256 previousId_, uint256 nextId_) = findPosition(endTime_, getHead()); //hint_
-
-        // Create node
-        Node memory newNode = Node({
-            nextId: nextId_,
-            endTime: endTime_,
-            share: shares_,
-            currentTotalWeight: getTotalWeightLocked(),
-            owner: address(0x0), // the deposit does not belong to this vault, so the owner will be zero
-            depositedLPTokens: amount_
-        });
-
-        // Insert the node into the list according to its position
-        insert(newNode, previousId_);
-        _updateTotalShares(getTotalShares() + shares_);
-        // Print List
-        uint256 id = getHead();
-        while (id != 0) {
-            emit LogNodeLL(deposits[id]);
-            id = deposits[id].nextId;
-        }
-    }
-
-    function _removeExternalDeposit(uint256 id_) internal {
-        // Start going over the list at the beggining
-        address owner_;
-        // See if any deposit has expired
-        // Update weight locked according to the expiration date of the deposit that expired
-        _updateTotalWeightLocked(deposits[id_].endTime);
-
-        // Update rewards acrued by the user
-        owner_ = deposits[id_].owner;
-        if (owner_ != address(0x0)) {
-            rewardsAcrued[owner_] = rewardsAcrued[owner_]
-                + (getTotalWeightLocked() - deposits[id_].currentTotalWeight) * deposits[id_].share;
-            emit LogRewardsAcrued(rewardsAcrued[owner_]);
-        }
-        // Reduce total amount of shares present in the vault
-        _updateTotalShares(getTotalShares() - deposits[id_].share);
-        deposits[id_].share = 0;
-        emit LogDepositExpired(owner_, id_);
-
-        // Remove node - the node to delete will always be the head, so previousId = 0
-        remove(0, deposits[id_].nextId);
-
-        // Print List
-        uint256 id = getHead();
-        while (id != 0) {
-            emit LogNodeLL(deposits[id]);
-            id = deposits[id].nextId;
-        }
-    }
-
-    function _transferOwnership(address newOwner) internal virtual override(Ownable, Ownable2Step) {
-        super._transferOwnership(newOwner);
-    }
-
-    /// ---------------------------------
     /// --- Helpers
     /// ---------------------------------
+    /// @notice visually show which chains are connected and in which direction
     function showConnectedChains() public {
         for (uint16 i = 0; i < _connectedChains.length; i++) {
             emit LogConnectedTo(_connectedChains[i]);
         }
     }
 
+    /// @notice adds a chain and address that should be trusted by the current vault
+    /// @param chainId_ if of the trusted chain
+    /// @param srcAddress_ address of the trusted contract
     function addConnectedChains(uint16 chainId_, address srcAddress_) public onlyOwner {
         _connectedChains.push(chainId_);
         _trustedAddresses[chainId_] = srcAddress_;

@@ -163,9 +163,11 @@ contract VaultFuzzTestPublic is Test {
         vm.stopPrank();
     }
 
-    function testFuzz_SingleWithdraw_SkipCI(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
-        public
-    {
+    function testFuzz_SingleWithdraw_SkipCI(
+        uint256 timeAfterDeposit_,
+        uint256 seedLockUpPeriod_,
+        uint256 depositAmount_
+    ) public {
         // -------------- Variables
         timeAfterDeposit_ = bound(timeAfterDeposit_, MINIMUM_TIME_TO_CLAIM, 500 weeks);
 
@@ -229,9 +231,11 @@ contract VaultFuzzTestPublic is Test {
         }
     }
 
-    function testFuzz_SingleClaimRewards_SkipCI(uint256 timeAfterDeposit_, uint256 seedLockUpPeriod_, uint256 depositAmount_)
-        public
-    {
+    function testFuzz_SingleClaimRewards_SkipCI(
+        uint256 timeAfterDeposit_,
+        uint256 seedLockUpPeriod_,
+        uint256 depositAmount_
+    ) public {
         // -------------- Variables
         timeAfterDeposit_ = bound(timeAfterDeposit_, MINIMUM_TIME_TO_CLAIM, 300 weeks); // a little bit more than 4 years as a upper bound
 
@@ -626,7 +630,7 @@ contract VaultFuzzTestPublic is Test {
                 vm.prank(actorsAddresses_[i_]);
                 try chainsToVault[chainsToConnect_[j]].claimRewards(0) returns (uint256 rewards) {
                     totalAwardsDistributedActual = totalAwardsDistributedActual + rewards;
-                } catch (bytes memory reason) { }
+                } catch (bytes memory) { }
                 //rewards = 0;
                 //totalAwardsDistributedActual = totalAwardsDistributedActual + chainsToVault[chainsToConnect_[j]].claimRewards(0);
             }

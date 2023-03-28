@@ -76,7 +76,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         // Update variables
         _updateTotalWeightLocked(block.timestamp);
         _updateTotalShares(_totalShares + share_);
-        _updateDeposit(hint_, endTime_, share_, amount_, getTotalShares(), block.timestamp, getTotalWeightLocked());
+        _updateDeposit(hint_, endTime_, share_, amount_);
         emit LogNewDeposit(msg.sender, depositID, amount_, share_, lockUpPeriod_);
     }
 
@@ -253,7 +253,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
     /// @notice updates the total weight locked according to the time interval considered (endTimeConsidered - lastMintTime)
     /// @param endTimeConsidered_ end time considered to define the time interval where the weight locked will be updated
-    function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal virtual {
+    function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal {
         uint256 totalWeightLocked_;
         if (_totalShares != 0) {
             totalWeightLocked_ =
@@ -298,7 +298,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         _totalShares = newTotalShares_;
     }
 
-    function _updateTotalShares(uint256 newTotalShares_) internal virtual {
+    function _updateTotalShares(uint256 newTotalShares_) internal {
         _setTotalShares(newTotalShares_);
     }
 
@@ -323,15 +323,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         return prev;
     }
 
-    function _updateDeposit(
-        uint256 hint_,
-        uint256 endTime_,
-        uint256 shares_,
-        uint256 amount_,
-        uint256 newTotalShares_,
-        uint256 endTimeConsidered_,
-        uint256 totalWeightLocked_
-    ) internal virtual { }
+    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_) internal virtual { }
 
     function _updateDepositExpired(uint256 idToRemove) internal virtual { }
 }
