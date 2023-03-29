@@ -49,7 +49,7 @@ contract VaultFuzzTestPublic is Test {
     LZEndpointMock lzEndpoint2; // chainId=2
     uint256 REWARDS_PER_SECOND = 317;
     uint256 MAX_DEPOSIT_AMOUNT = 1000;
-    uint256 MINIMUM_TIME_TO_CLAIM = 600; // 10 minutes
+    uint256 MINIMUM_TIME_TO_CLAIM = 1 weeks;
 
     mapping(address => uint256) actorsWithRewardsClaimed;
     mapping(address => uint256[]) actorsWithDeposits;
@@ -251,7 +251,8 @@ contract VaultFuzzTestPublic is Test {
         //Approve  tokens to the vault
         _approveTokens(balance, address(vault1));
         // Pass some time so block.timestamp is more realistic
-        vm.warp(block.timestamp + 52 weeks);
+        time = 52 weeks;
+        vm.warp(time);
 
         // -------------- Make a deposit
         if (lockUpPeriod_ == 6 || lockUpPeriod_ == 1 || lockUpPeriod_ == 2 || lockUpPeriod_ == 4) {
@@ -263,7 +264,7 @@ contract VaultFuzzTestPublic is Test {
         vm.stopPrank();
 
         // -------------- Try to claim it a random amount of time after
-        vm.warp(block.timestamp + timeAfterDeposit_);
+        vm.warp(time + timeAfterDeposit_);
         vm.prank(lucy);
         if (!reverted) {
             uint256 claimedRewards_ = vault1.claimRewards(0); // try to claim all the rewards
@@ -340,8 +341,9 @@ contract VaultFuzzTestPublic is Test {
         uint256 seedAmountOfRepeatedAddresses
     ) public {
         // -------------- Variables
-        time = block.timestamp + 52 weeks;
-
+        uint256 firstDepositTime;
+        bool firstDepositHasNotOcurred = true;
+        time = 52 weeks;
         // -------------- Fuzz test set up
         numberOfDeposits_ = bound(numberOfDeposits_, 1, AMOUNT_OF_DEPOSITS_TESTED / 2); // bond number of deposits
         (
@@ -359,13 +361,16 @@ contract VaultFuzzTestPublic is Test {
             seedAmountOfRepeatedAddresses % 99 + 1
         );
         vm.warp(time);
-
         // Make deposits
         // --------------  Make various deposits
         for (uint256 i_ = 0; i_ < depositsAmount_.length; i_++) {
             vm.startPrank(Addresses_[i_]);
             // -------------- Make the deposit
-            _makeADepositWithExpects(lockUpPeriodList_[i_], depositsAmount_[i_], vault1, Addresses_[i_]);
+            success = _makeADepositWithExpects(lockUpPeriodList_[i_], depositsAmount_[i_], vault1, Addresses_[i_]);
+            if (success && firstDepositHasNotOcurred) {
+                firstDepositTime = time;
+                firstDepositHasNotOcurred = false;
+            }
             // Wrap a random amount of time
             time = time + timeBetweenDeposits_[i_];
             vm.warp(time);
@@ -373,8 +378,10 @@ contract VaultFuzzTestPublic is Test {
         }
 
         // Try to claim
-        vm.warp(time + 2 weeks); // so every valid deposit has rewards acrued
+        uint256 endDepositTime = time + 2 weeks;
+        vm.warp(endDepositTime); // so every valid deposit has rewards acrued
         uint256 rewardsClaimed;
+        uint256 totalRewardsClaimed = 0;
         // Try to claim rewards from all valid deposits
         for (uint256 i_ = 0; i_ < Addresses_.length; i_++) {
             vm.startPrank(Addresses_[i_]);
@@ -387,6 +394,7 @@ contract VaultFuzzTestPublic is Test {
                 // there was a valid lock up period, valid deposit and rewards have not been claimed
                 rewardsClaimed = vault1.claimRewards(0);
                 assertGt(rewardsClaimed, 0);
+                totalRewardsClaimed = totalRewardsClaimed + rewardsClaimed;
                 actorsWithRewardsClaimed[Addresses_[i_]] = 1;
             }
             vm.stopPrank();
@@ -399,6 +407,16 @@ contract VaultFuzzTestPublic is Test {
             vm.expectRevert(NoRewardsToClaimError.selector);
             vault1.claimRewards(0);
             vm.stopPrank();
+        }
+        emit LogUintPair(endDepositTime, firstDepositTime);
+        if (depositId > 1) {
+            if (vault1.getHead() == 0 && vault1.getTail() == 0) {
+                // do nothing - list is empty so we can't compare the rewards distributed
+            } else {
+                assert(
+                    _similarNumbers(REWARDS_PER_SECOND * (endDepositTime - firstDepositTime), totalRewardsClaimed, 5)
+                );
+            }
         }
     }
 
@@ -569,12 +587,19 @@ contract VaultFuzzTestPublic is Test {
             vm.warp(time);
             vm.stopPrank();
         }
-
+        vm.warp(time + 5000);
         // Check if total deposits is the same as the deposit id
         _assertNumberOfDeposits(successfullDeposits_, numberOfChains_);
 
+        // Check total number of tokens deposited
         // Check if the claimed rewards since the beggining are distributed across all chains
-        //_assertRewardsDistributed(actorsAddresses_,numberOfChains_, chainsToConnect_ );
+        if (depositId > 1) {
+            if (vault1.getHead() == 0 && vault1.getTail() == 0) {
+                // do nothing - list is empty so we can't compare the rewards distributed
+            } else {
+                _assertRewardsDistributed(actorsAddresses_, numberOfChains_, chainsToConnect_);
+            }
+        }
     }
 
     // -------------------------------------------------
@@ -628,11 +653,12 @@ contract VaultFuzzTestPublic is Test {
         for (uint256 i_ = 0; i_ < actorsAddresses_.length; i_++) {
             for (uint16 j = 0; j < numberOfChains_; j++) {
                 vm.prank(actorsAddresses_[i_]);
-                try chainsToVault[chainsToConnect_[j]].claimRewards(0) returns (uint256 rewards) {
+                /*try chainsToVault[chainsToConnect_[j]].claimRewards(0) returns (uint256 rewards) {
                     totalAwardsDistributedActual = totalAwardsDistributedActual + rewards;
-                } catch (bytes memory) { }
+                } catch (bytes memory) { }*/
                 //rewards = 0;
-                //totalAwardsDistributedActual = totalAwardsDistributedActual + chainsToVault[chainsToConnect_[j]].claimRewards(0);
+                totalAwardsDistributedActual =
+                    totalAwardsDistributedActual + chainsToVault[chainsToConnect_[j]].claimRewards(0);
             }
         }
         assert(_similarNumbers(REWARDS_PER_SECOND * (block.timestamp - startTime), totalAwardsDistributedActual, 5));

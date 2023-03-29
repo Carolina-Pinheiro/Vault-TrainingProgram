@@ -264,25 +264,25 @@ contract VaultTestV2 is Test {
         // Pass some time so block.timestamp is more realistical
         vm.warp(block.timestamp + 52 weeks);
 
-        // User makes two spaced out deposits in vault 1
+        // User makes a deposits in vault 1
         vm.prank(lucy);
-        vault1.deposit{ value: 1 ether }(10, 6);
+        vault1.deposit{ value: 1 ether }(100, 6);
 
-        vm.warp(block.timestamp + 1 weeks);
+        //vm.warp(block.timestamp + 1 weeks);
 
         uint256 recentId = vault2.getMostRecentId();
         emit LogNode(vault2.getNode(recentId));
 
         vm.prank(julien);
-        vault2.deposit{ value: 1 ether }(10, 1); // will end after so 1-> 2
+        vault2.deposit{ value: 1 ether }(100, 2); // will end after so 1-> 2
 
         recentId = vault2.getMostRecentId();
         assertEq(vault2.getNode(1).nextId, 2); // node 2 of vault2 is connected to node 1
-        vm.warp(block.timestamp + 2);
+        //vm.warp(block.timestamp + 2);
 
         // node from vault 1 in between
         vm.prank(phoebe);
-        vault2.deposit{ value: 1 ether }(10, 6); // 1 -> 3 -> 2
+        vault2.deposit{ value: 1 ether }(100, 1); // 1 -> 3 -> 2
 
         assertEq(vault2.getHead(), 1);
         assertEq(vault2.getNode(1).nextId, 3);
@@ -320,7 +320,36 @@ contract VaultTestV2 is Test {
         uint256 rewardsClaimedLucy = vault1.claimRewards(0); // claimed deposit
 
         emit LogUintPair(rewardsClaimedPhoebe, rewardsClaimedLucy);
-        assert(_similarNumbers(rewardsClaimedPhoebe, rewardsClaimedLucy, 10));
+        assertEq(_similarNumbers(rewardsClaimedPhoebe, 2 * rewardsClaimedLucy, 5), true);
+    }
+
+    function testSingleClaimVaultV2() external {
+        //------Lucy set-up
+        // Give users tokens
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+
+        //Approve and transfer tokens to the vault
+        _approveTokens(balance, address(vault1));
+        vm.stopPrank();
+
+        vm.warp(52 weeks);
+        vm.prank(lucy);
+        vault1.deposit(10, 6); // deposit 1
+
+        vm.warp(62 weeks);
+        vm.prank(lucy);
+        vm.expectRevert(NoRewardsToClaimError.selector);
+        uint256 rewardsClaimed = vault2.claimRewards(0);
+        assertEq(rewardsClaimed, 0);
+
+        vm.warp(64 weeks);
+        vm.prank(lucy);
+        rewardsClaimed = vault1.claimRewards(0);
+
+        uint256 expectedRewards = REWARDS_PER_SECOND * 12 weeks;
+
+        assertEq(rewardsClaimed, expectedRewards);
     }
 
     //-----------------------------------------------------------------------

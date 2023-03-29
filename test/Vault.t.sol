@@ -706,6 +706,28 @@ contract VaultTest is Test {
         vault.deposit(50, 4);
     }
 
+    function testSingleClaim() external {
+        //------Lucy set-up
+        // Give users tokens
+        vm.startPrank(lucy);
+        uint256 balance = _userGetLPTokens(lucy);
+
+        //Approve and transfer tokens to the vault
+        _approveTokens(balance);
+        vm.stopPrank();
+
+        vm.warp(52 weeks);
+        vm.prank(lucy);
+        vault.deposit(10, 6); // deposit 1
+
+        vm.warp(54 weeks);
+        vm.prank(lucy);
+        uint256 rewardsClaimed = vault.claimRewards(0);
+        uint256 expectedRewards = REWARDS_PER_SECOND * 2 weeks;
+
+        assertEq(rewardsClaimed, expectedRewards);
+    }
+
     function _setUpUniswap() internal returns (address) {
         // Setup token contracts
         weth = new WETH9();
