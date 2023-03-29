@@ -202,7 +202,7 @@ contract VaultV2 is Vault, LzApp {
         owner_ = deposits[id_].owner;
         if (owner_ != address(0x0)) {
             rewardsAcrued[owner_] = rewardsAcrued[owner_]
-                + (getTotalWeightLocked() - deposits[id_].currentTotalWeight) * deposits[id_].share;
+                + ((getTotalWeightLocked() - deposits[id_].currentTotalWeight) / PRECISION) * deposits[id_].share;
             emit LogRewardsAcrued(rewardsAcrued[owner_]);
         }
         // Reduce total amount of shares present in the vault

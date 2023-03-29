@@ -21,6 +21,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     uint256 private _lastMintTime;
     uint256 public constant REWARDS_PER_SECOND = 317;
     uint256 public constant MAX_DEPOSIT_AMOUNT = 1000;
+    uint256 public constant PRECISION = 1 ether;
 
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
@@ -166,7 +167,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
             // Update rewards acrued by the user
             owner_ = deposits[currentId_].owner;
             rewardsAcrued[owner_] = rewardsAcrued[owner_]
-                + (_totalWeightLocked - deposits[currentId_].currentTotalWeight) * deposits[currentId_].share;
+                + ((_totalWeightLocked - deposits[currentId_].currentTotalWeight) / PRECISION) * deposits[currentId_].share;
             emit LogRewardsAcrued(rewardsAcrued[owner_]);
             // Reduce total amount of shares present in the vault
             _updateTotalShares(_totalShares - deposits[currentId_].share);
@@ -187,12 +188,14 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         address owner_ = msg.sender;
         uint256 currentId_;
         _updateTotalWeightLocked(block.timestamp);
+        emit LogUint(getTotalWeightLocked());
         for (uint256 i = 0; i < ownersDepositId[owner_].length; i++) {
             // Update rewards acrued by the user
             currentId_ = ownersDepositId[owner_][i];
             if (deposits[currentId_].share != 0) {
                 rewardsAcrued[owner_] = rewardsAcrued[owner_]
-                    + (_totalWeightLocked - deposits[currentId_].currentTotalWeight) * deposits[currentId_].share;
+                    + ((_totalWeightLocked - deposits[currentId_].currentTotalWeight) / PRECISION)
+                        * deposits[currentId_].share;
                 deposits[currentId_].currentTotalWeight = _totalWeightLocked;
                 emit LogRewardsAcrued(rewardsAcrued[owner_]);
             }
@@ -255,11 +258,11 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     /// @param endTimeConsidered_ end time considered to define the time interval where the weight locked will be updated
     function _updateTotalWeightLocked(uint256 endTimeConsidered_) internal {
         uint256 totalWeightLocked_;
-        if (_totalShares != 0) {
-            totalWeightLocked_ =
-                _totalWeightLocked + (REWARDS_PER_SECOND * (endTimeConsidered_ - _lastMintTime)) / (_totalShares);
+        if (getTotalShares() != 0) {
+            totalWeightLocked_ = getTotalWeightLocked()
+                + (REWARDS_PER_SECOND * PRECISION * (endTimeConsidered_ - getLastMintTime())) / (getTotalShares());
         } else {
-            totalWeightLocked_ = _totalWeightLocked;
+            totalWeightLocked_ = getTotalWeightLocked();
         }
         _setLastMintTime(endTimeConsidered_);
         _setTotalWeightLocked(totalWeightLocked_);
