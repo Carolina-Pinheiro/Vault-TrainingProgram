@@ -18,7 +18,7 @@ interface IVault is ILinkedList {
     event LogRewardsAcrued(uint256);
     event LogUintPair(uint256, uint256);
     event LogNewDeposit(address, uint256, uint256, uint256, uint256);
-
+    event LogNewMintTime(uint256);
     //-----------------------------------------------------------------------
     //------------------------------ERRORS-----------------------------------
     //-----------------------------------------------------------------------

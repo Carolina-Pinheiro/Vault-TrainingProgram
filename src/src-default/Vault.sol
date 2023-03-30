@@ -77,7 +77,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         // Update variables
         _updateTotalWeightLocked(block.timestamp);
         _updateTotalShares(_totalShares + share_);
-        _updateDeposit(hint_, endTime_, share_, amount_);
+        _updateDeposit(hint_, endTime_, share_, amount_, block.timestamp);
         emit LogNewDeposit(msg.sender, depositID, amount_, share_, lockUpPeriod_);
         return true;
     }
@@ -185,7 +185,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         }
     }
 
-    function _calculateOwnerRewardsAcrued() internal {
+    function _calculateOwnerRewardsAcrued() internal virtual {
         address owner_ = msg.sender;
         uint256 currentId_;
         _updateTotalWeightLocked(block.timestamp);
@@ -195,9 +195,9 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
             currentId_ = ownersDepositId[owner_][i];
             if (deposits[currentId_].share != 0) {
                 rewardsAcrued[owner_] = rewardsAcrued[owner_]
-                    + ((_totalWeightLocked - deposits[currentId_].currentTotalWeight) / PRECISION)
+                    + ((getTotalWeightLocked() - deposits[currentId_].currentTotalWeight) / PRECISION)
                         * deposits[currentId_].share;
-                deposits[currentId_].currentTotalWeight = _totalWeightLocked;
+                deposits[currentId_].currentTotalWeight = getTotalWeightLocked();
                 emit LogRewardsAcrued(rewardsAcrued[owner_]);
             }
         }
@@ -295,6 +295,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     }
 
     function _setLastMintTime(uint256 newLastMintTime_) internal {
+        emit LogNewMintTime(newLastMintTime_);
         _lastMintTime = newLastMintTime_;
     }
 
@@ -327,7 +328,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         return prev;
     }
 
-    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_) internal virtual { }
+    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_) internal virtual { }
 
     function _updateDepositExpired(uint256 idToRemove) internal virtual { }
 }

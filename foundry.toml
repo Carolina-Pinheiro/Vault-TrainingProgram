@@ -50,7 +50,7 @@ optimism  = { key = "${OPTIMISM_ETHERSCAN_KEY}", url = "https://api-optimistic.e
 polygon   = { key = "${POLYGONSCAN_KEY}",        url = "https://api.polygonscan.com/api" }
 
 [invariant]
-runs = 25
+runs = 256
 depth = 15
 fail_on_revert = false
 call_override = false

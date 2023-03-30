@@ -75,6 +75,10 @@ contract VaultInvariant is Test {
 
     VaultV2[] private _chainToVault = new VaultV2[](2);
 
+
+    //-----------------------------------------------------------------------
+    //-------------------------------SET-UP----------------------------------
+    //-----------------------------------------------------------------------
     function setUp() public {
         // Label addresses
         vm.label(ownerVault, "OwnerVault");
@@ -136,7 +140,14 @@ contract VaultInvariant is Test {
         targetContract(address(handler));
     }
 
-    function invariant_AmountOfDepositedTokens() public {
+
+    //-----------------------------------------------------------------------
+    //-----------------------------INVARIANTS--------------------------------
+    //-----------------------------------------------------------------------
+
+    // ----------------------------------------
+    // Invariants to assert that deposits/balances/tokens are being handled correctly
+    function invariant_AmountOfDepositedTokens_SkipCI() public {
         uint256 amountOfDepositedTokens_ = 0;
         for (uint256 i = 0; i < 2; i++) {
             ILinkedList.Node memory newNode_;
@@ -151,15 +162,52 @@ contract VaultInvariant is Test {
                 }
                 id++;
             }
-            vm.writeLine(
-                "test/invariant/handlers/out.txt",
-                string.concat(
-                    uint2str(amountOfDepositedTokens_), uint2str(Token(LPToken).balanceOf(address(_chainToVault[i])))
-                )
-            );
             assertEq(Token(LPToken).balanceOf(address(_chainToVault[i])), amountOfDepositedTokens_);
             amountOfDepositedTokens_ = 0; // reset variable
         }
+    }
+
+    function invariant_SumOfActiveSharesEqualsTotalShares_SkipCI() public{
+        uint256 amountOfDepositedShares_ = 0;
+        for (uint256 i = 0; i < 2; i++) {
+            ILinkedList.Node memory newNode_;
+            uint256 id = 1;
+
+            // All of the deposits have to be considered, not only the ones in the LL, since even if a deposit expires the LP tokens will be in the vault untill a valid withdrawl
+            while (id <= _chainToVault[i].getMostRecentId()) {
+                vm.prank(address(_chainToVault[i]));
+                newNode_ = _chainToVault[i].getDeposit(id);
+                amountOfDepositedShares_ = amountOfDepositedShares_ + newNode_.share;
+                id++;
+            }
+            vm.writeLine(
+                "test/invariant/handlers/out.txt",
+                string.concat(
+                    uint2str(amountOfDepositedShares_), uint2str(Token(LPToken).balanceOf(address(_chainToVault[i])))
+                )
+            );
+            assertEq(_chainToVault[i].getTotalShares(), amountOfDepositedShares_);
+            amountOfDepositedShares_ = 0; // reset variable
+        }
+    }
+
+
+    // ----------------------------------------
+    // Invariants for information that is supposed to be sincronized across all chains
+    function invariant_TotalSharesAcrossChains_SkipCI() public{
+        assertEq(_chainToVault[0].getTotalShares(),_chainToVault[1].getTotalShares() );
+    }
+
+    function invariant_TotalWeightLockedAcrossChains_SkipCI() public{
+        assertEq(_chainToVault[0].getTotalWeightLocked(),_chainToVault[1].getTotalWeightLocked() );
+    }
+
+    function invariant_LastMintTimeAcrossChains_SkipCI() public{
+        assertEq(_chainToVault[0].getLastMintTime(),_chainToVault[1].getLastMintTime() );
+    }
+
+    function invariant_SizeOfDepositListAcrossChains_SkipCI() public{
+        assertEq(_chainToVault[0].getMostRecentId(),_chainToVault[1].getMostRecentId() );
     }
 
     //-----------------------------------------------------------------------

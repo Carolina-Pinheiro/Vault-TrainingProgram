@@ -28,6 +28,7 @@ contract VaultV2 is Vault, LzApp {
         uint256 endTime;
         uint256 shares;
         uint256 amount;
+        uint256 timestamp;
     }
 
     constructor(address LPToken_, address lzEndpoint_) Vault(LPToken_) LzApp(lzEndpoint_) { }
@@ -120,10 +121,10 @@ contract VaultV2 is Vault, LzApp {
     /// @param endTime_ expiration time of the new deposit
     /// @param shares_ amount of shares of the deposit
     /// @param amount_ amount of tokens deposited
-    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_) internal override {
+    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_) internal override {
         // NOTE CAN BE IMPROVED TO BE MORE EFFIECNT USING THE HINT
         depositInfo memory newDeposit_ =
-            depositInfo({ hint: hint_, endTime: endTime_, shares: shares_, amount: amount_ });
+            depositInfo({ hint: hint_, endTime: endTime_, shares: shares_, amount: amount_, timestamp: timestamp_ });
         // encode the payload with the new totalShares
         bytes memory payload = abi.encode(0, 0, newDeposit_, 3);
 
@@ -155,6 +156,15 @@ contract VaultV2 is Vault, LzApp {
         }
     }
 
+    function _calculateOwnerRewardsAcrued() internal override {
+        super._calculateOwnerRewardsAcrued();
+
+        // Propagates new info
+        for (uint16 i = 0; i < _connectedChains.length; i++) {
+            this.sendMessageUpdateTotalWeight{ value: 0.5 ether }(_connectedChains[i], getLastMintTime(), getTotalWeightLocked());
+        }
+    }
+
     /// ---------------------------------
     /// --- Internal
     /// ---------------------------------
@@ -163,9 +173,9 @@ contract VaultV2 is Vault, LzApp {
     /// @param endTime_ expiration time of the new deposit
     /// @param shares_ amount of shares of the deposit
     /// @param amount_ amount of tokens deposited
-    function _addExternalDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_) internal {
+    function _addExternalDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_) internal {
         // Find position where to insert the node
-        _updateTotalWeightLocked(block.timestamp);
+        _updateTotalWeightLocked(timestamp_);
         (uint256 previousId_, uint256 nextId_) = findPosition(endTime_, getHead()); //hint_
 
         // Create node
@@ -258,7 +268,7 @@ contract VaultV2 is Vault, LzApp {
             _setTotalShares(arg1);
             emit LogNewTotalShares(_srcChainId, arg1);
         } else if (typeMessage == 3) {
-            _addExternalDeposit(newDeposit.hint, newDeposit.endTime, newDeposit.shares, newDeposit.amount);
+            _addExternalDeposit(newDeposit.hint, newDeposit.endTime, newDeposit.shares, newDeposit.amount, newDeposit.timestamp);
         } else if (typeMessage == 4) {
             _removeExternalDeposit(arg1);
         }
