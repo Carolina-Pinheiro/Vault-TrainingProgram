@@ -55,7 +55,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         __UUPSUpgradeable_init();
     }
 
-    function deposit(uint256 amount_, uint256 lockUpPeriod_) external payable returns (bool){
+    function deposit(uint256 amount_, uint256 lockUpPeriod_) external payable returns (bool) {
         if (amount_ == 0) revert NotEnoughAmountOfTokensDepositedError();
         if (amount_ > MAX_DEPOSIT_AMOUNT) revert DepositAmountExceededError();
         // Check if any deposit has expired
@@ -73,7 +73,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         // Create a new deposit
         (uint256 depositID, uint256 hint_, uint256 endTime_) = _insertNewNode(lockUpPeriod_, share_, amount_); // new deposit
         ownersDepositId[msg.sender].push(depositID);
-        
+
         // Update variables
         _updateTotalWeightLocked(block.timestamp);
         _updateTotalShares(_totalShares + share_);
@@ -318,7 +318,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         return (_totalShares);
     }
 
-    function getDepositEndtime(uint256 id_) public view returns (uint256) {
+    function getDepositEndtime(uint256 id_) external view returns (uint256) {
         return (deposits[id_].endTime);
     }
 

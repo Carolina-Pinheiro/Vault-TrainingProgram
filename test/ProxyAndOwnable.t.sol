@@ -86,7 +86,7 @@ contract VaultTest is Test {
         });
         vm.expectEmit(true, true, true, true);
         emit LogNode(newNode_);
-        
+
         IVault(address(proxy)).deposit(5, 1);
         //(bool success,) = address(proxy).call(abi.encodeWithSignature("deposit(uint256,uint256)", 5, 1));
         //require(success); // using SafeERC20 for IERC20
