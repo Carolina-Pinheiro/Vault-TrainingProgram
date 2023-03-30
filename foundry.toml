@@ -49,6 +49,14 @@ mainnet   = { key = "${ETHERSCAN_KEY}" }
 optimism  = { key = "${OPTIMISM_ETHERSCAN_KEY}", url = "https://api-optimistic.etherscan.io/api" }
 polygon   = { key = "${POLYGONSCAN_KEY}",        url = "https://api.polygonscan.com/api" }
 
+[invariant]
+runs = 25
+depth = 15
+fail_on_revert = false
+call_override = false
+dictionary_weight = 80
+include_storage = true
+include_push_bytes = true
 
 [fuzz]
 runs = 256
