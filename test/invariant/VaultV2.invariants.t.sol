@@ -9,7 +9,6 @@ import { WETH9 } from "test/WETH9.sol";
 import { PoolToken } from "test/PoolToken.sol";
 import { ILinkedList } from "src/src-default/interfaces/ILinkedList.sol";
 import { IVault } from "src/src-default/interfaces/IVault.sol";
-import { utilsTest } from "test/utils/utils.sol";
 import { Handler } from "test/invariant/handlers/handler.sol";
 
 contract VaultInvariant is Test {
@@ -74,6 +73,8 @@ contract VaultInvariant is Test {
     error WrongLockUpPeriodError();
     error NotTrustedChainOrAddressError();
 
+    VaultV2[] private _chainToVault = new VaultV2[](2);
+
     function setUp() public {
         // Label addresses
         vm.label(ownerVault, "OwnerVault");
@@ -85,7 +86,7 @@ contract VaultInvariant is Test {
         // Create endpoints
         lzEndpoint1 = new LZEndpointMock(1); // chainId=1
         lzEndpoint2 = new LZEndpointMock(2); // chainId=2
-        
+
         // Rewards Token
         rewardToken = new Token(address(lzEndpoint1), address(vault1));
 
@@ -103,13 +104,17 @@ contract VaultInvariant is Test {
         lzEndpoint1.setDestLzEndpoint(address(vault2), address(lzEndpoint2));
         lzEndpoint2.setDestLzEndpoint(address(vault1), address(lzEndpoint1));
         vm.stopPrank();
-        
+
         // Label addresses and deal ether
         vm.label(address(vault1), "Vault-Chain1");
         vm.label(address(vault2), "Vault-Chain2");
         vm.deal(ownerVault, 50 ether);
         vm.deal(address(vault1), 50 ether);
         vm.deal(address(vault2), 50 ether);
+
+        // initialize variable
+        _chainToVault[0] = vault1;
+        _chainToVault[1] = vault2;
 
         // Handler
         handler = new Handler(vault1, vault2, poolToken, weth, LPToken, router);
@@ -122,25 +127,44 @@ contract VaultInvariant is Test {
         excludeContract(address(weth));
 
         // Targets
+        bytes4[] memory selectors = new bytes4[](4);
+        selectors[0] = Handler.deposit.selector;
+        selectors[1] = Handler.skipBiggerTime.selector;
+        selectors[2] = Handler.withdraw.selector;
+        selectors[3] = Handler.claimRewards.selector;
+        targetSelector(FuzzSelector({ addr: address(handler), selectors: selectors }));
         targetContract(address(handler));
     }
 
     function invariant_AmountOfDepositedTokens() public {
         uint256 amountOfDepositedTokens_ = 0;
-        uint256 currId_ = vault1.getHead();
-        ILinkedList.Node memory newNode_;
+        for (uint256 i = 0; i < 2; i++) {
+            ILinkedList.Node memory newNode_;
+            uint256 id = 1;
 
-        while(currId_ != 0){
-            vm.prank(address(vault1));
-            newNode_ = vault1.getDeposit(currId_);
-            if (newNode_.owner != address(0x0)) amountOfDepositedTokens_ = amountOfDepositedTokens_ + newNode_.depositedLPTokens;
-            currId_ = newNode_.nextId;
+            // All of the deposits have to be considered, not only the ones in the LL, since even if a deposit expires the LP tokens will be in the vault untill a valid withdrawl
+            while (id <= _chainToVault[i].getMostRecentId()) {
+                vm.prank(address(_chainToVault[i]));
+                newNode_ = _chainToVault[i].getDeposit(id);
+                if (newNode_.owner != address(0x0)) {
+                    amountOfDepositedTokens_ = amountOfDepositedTokens_ + newNode_.depositedLPTokens;
+                }
+                id++;
+            }
+            vm.writeLine(
+                "test/invariant/handlers/out.txt",
+                string.concat(
+                    uint2str(amountOfDepositedTokens_), uint2str(Token(LPToken).balanceOf(address(_chainToVault[i])))
+                )
+            );
+            assertEq(Token(LPToken).balanceOf(address(_chainToVault[i])), amountOfDepositedTokens_);
+            amountOfDepositedTokens_ = 0; // reset variable
         }
-        vm.writeLine("test/invariant/handlers/out.txt",string.concat(uint2str(amountOfDepositedTokens_),uint2str(Token(LPToken).balanceOf(address(vault1)))));
-        assertEq(Token(LPToken).balanceOf(address(vault1)),amountOfDepositedTokens_ );
     }
 
-
+    //-----------------------------------------------------------------------
+    //------------------------------HELPERS----------------------------------
+    //-----------------------------------------------------------------------
     function _setUpUniswap() internal returns (address) {
         // Setup token contracts
         weth = new WETH9();
@@ -232,10 +256,9 @@ contract VaultInvariant is Test {
         return balance;
     }
 
-
     function uint2str(uint256 _i) internal pure returns (string memory str) {
         if (_i == 0) {
-            return "0";
+            return " 0 ";
         }
         uint256 j = _i;
         uint256 length;
@@ -250,7 +273,6 @@ contract VaultInvariant is Test {
             bstr[--k] = bytes1(uint8(48 + j % 10));
             j /= 10;
         }
-        str = string(bstr);
+        str = string.concat(string.concat(" ", string(bstr)), " ");
     }
-
 }
