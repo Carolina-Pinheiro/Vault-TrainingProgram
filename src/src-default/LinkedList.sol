@@ -9,7 +9,7 @@ contract LinkedList is ILinkedList {
     /// @notice The tail of the linked list.
     uint256 private _tail;
 
-    address private _vault;
+    address private immutable _vault;
 
     /**
      * @notice Maps an Id to a node.
@@ -92,22 +92,22 @@ contract LinkedList is ILinkedList {
 
     /// @notice Finds the position of a new node based on the endTime
     /// @return (previousId, nextId) the previous id and the next id where the node will be inserted
-    function findPosition(uint256 endTime, uint256 firstIdToSearch) public view returns (uint256, uint256) {
-        uint256 currId = firstIdToSearch;
+    function findPosition(uint256 endTime, uint256 hint) public view returns (uint256, uint256) {
+        uint256 currId = hint;
 
         if (_id == 0) {
             // the list is empty
             return (0, 0); // node will be both the head and the tail
         }
-
+        uint256 previousId = 0;
         while (
-            deposits[deposits[currId].nextId].endTime < endTime // finds the nodes between which to insert
-                && getTail() != currId // or is at the end of the list
+            deposits[currId].endTime < endTime // finds the nodes between which to insert
+                && currId != 0 // getTail() != currId // or is at the end of the list
         ) {
+            previousId = currId;
             currId = deposits[currId].nextId;
         }
-        uint256 previousId = currId;
-        uint256 nextId = deposits[currId].nextId;
+        uint256 nextId = currId;
 
         return (previousId, nextId);
     }
