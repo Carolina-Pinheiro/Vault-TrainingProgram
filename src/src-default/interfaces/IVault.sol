@@ -22,6 +22,7 @@ interface IVault is ILinkedList {
     //-----------------------------------------------------------------------
     //------------------------------ERRORS-----------------------------------
     //-----------------------------------------------------------------------
+
     error NoRewardsToClaimError();
     error TransferOfLPTokensWasNotPossibleError();
     error NotEnoughAmountOfTokensDepositedError();

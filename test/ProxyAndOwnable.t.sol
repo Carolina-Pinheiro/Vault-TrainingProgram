@@ -65,6 +65,7 @@ contract VaultTest is Test {
         vault = new Vault(LPToken);
         bytes memory data_;
         proxy = new Proxy(address(vault), ownerVault, data_);
+        Vault(payable(address(proxy))).initialize();
     }
 
     function testProxyCall() external {

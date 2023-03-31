@@ -121,7 +121,10 @@ contract VaultV2 is Vault, LzApp {
     /// @param endTime_ expiration time of the new deposit
     /// @param shares_ amount of shares of the deposit
     /// @param amount_ amount of tokens deposited
-    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_) internal override {
+    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_)
+        internal
+        override
+    {
         // NOTE CAN BE IMPROVED TO BE MORE EFFIECNT USING THE HINT
         depositInfo memory newDeposit_ =
             depositInfo({ hint: hint_, endTime: endTime_, shares: shares_, amount: amount_, timestamp: timestamp_ });
@@ -161,7 +164,9 @@ contract VaultV2 is Vault, LzApp {
 
         // Propagates new info
         for (uint16 i = 0; i < _connectedChains.length; i++) {
-            this.sendMessageUpdateTotalWeight{ value: 0.5 ether }(_connectedChains[i], getLastMintTime(), getTotalWeightLocked());
+            this.sendMessageUpdateTotalWeight{ value: 0.5 ether }(
+                _connectedChains[i], getLastMintTime(), getTotalWeightLocked()
+            );
         }
     }
 
@@ -173,7 +178,9 @@ contract VaultV2 is Vault, LzApp {
     /// @param endTime_ expiration time of the new deposit
     /// @param shares_ amount of shares of the deposit
     /// @param amount_ amount of tokens deposited
-    function _addExternalDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_) internal {
+    function _addExternalDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_)
+        internal
+    {
         // Find position where to insert the node
         _updateTotalWeightLocked(timestamp_);
         (uint256 previousId_, uint256 nextId_) = findPosition(endTime_, getHead()); //hint_
@@ -268,7 +275,9 @@ contract VaultV2 is Vault, LzApp {
             _setTotalShares(arg1);
             emit LogNewTotalShares(_srcChainId, arg1);
         } else if (typeMessage == 3) {
-            _addExternalDeposit(newDeposit.hint, newDeposit.endTime, newDeposit.shares, newDeposit.amount, newDeposit.timestamp);
+            _addExternalDeposit(
+                newDeposit.hint, newDeposit.endTime, newDeposit.shares, newDeposit.amount, newDeposit.timestamp
+            );
         } else if (typeMessage == 4) {
             _removeExternalDeposit(arg1);
         }

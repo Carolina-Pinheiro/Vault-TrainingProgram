@@ -55,6 +55,7 @@ contract VaultFuzzTestPublic is Test {
     mapping(address => uint256[]) actorsWithDeposits;
     mapping(uint16 => VaultV2) chainsToVault;
     mapping(uint16 => address) chainsToEndpoint;
+    mapping(uint256 => uint256) private lockUpPeriod; // lockUpPeriod -> rewardsMultiplier
 
     uint256 balanceBefore;
     uint256 balanceAfter;
@@ -117,6 +118,12 @@ contract VaultFuzzTestPublic is Test {
         vm.deal(ownerVault, 10_000 ether);
         vm.deal(address(vault1), 10_000 ether);
         vm.deal(address(vault2), 10_000 ether);
+
+        // Set lock up period
+        lockUpPeriod[6] = 1;
+        lockUpPeriod[1] = 2;
+        lockUpPeriod[2] = 4;
+        lockUpPeriod[4] = 8;
     }
 
     // Needed so the test contract itself can receive ether
@@ -783,21 +790,13 @@ contract VaultFuzzTestPublic is Test {
         return balance;
     }
 
-    function _getRewardsMultiplier(uint256 lockUpPeriod) internal pure returns (uint256) {
-        uint256 rewardsMultiplier;
-        if (lockUpPeriod == 6) {
-            rewardsMultiplier = 1;
-        } else if (lockUpPeriod == 1) {
-            rewardsMultiplier = 2;
-        } else if (lockUpPeriod == 2) {
-            rewardsMultiplier = 4;
-        } else if (lockUpPeriod == 4) {
-            rewardsMultiplier = 8;
+    function _getRewardsMultiplier(uint256 userLockUpPeriod_) internal view returns (uint256 rewardsMultiplier_) {
+        if (lockUpPeriod[userLockUpPeriod_] != 0) {
+            rewardsMultiplier_ = lockUpPeriod[userLockUpPeriod_];
         } else {
             revert WrongLockUpPeriodError();
         }
-
-        return rewardsMultiplier;
+        return rewardsMultiplier_;
     }
 
     function _calculateEndTime(uint256 lockUpPeriod_, uint256 currentTime_) internal pure returns (uint256 endTime_) {

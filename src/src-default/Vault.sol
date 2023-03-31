@@ -25,6 +25,7 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
 
     mapping(address => uint256) public rewardsAcrued; // updated when a user tries to claim rewards
     mapping(address => uint256[]) public ownersDepositId; // ids of the owners
+    mapping(uint256 => uint256) public lockUpPeriod; // lockUpPeriod -> rewardsMultiplier
 
     uint256[50] __gap;
 
@@ -37,7 +38,12 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         // These variables can be initialized in the constructor since they are immutable
         _LPToken = LPToken_;
         _rewardsToken = new Token(address(0x0), address(this));
-        _disableInitializers();
+        //_disableInitializers();
+        // Set lock up period
+        lockUpPeriod[6] = 1;
+        lockUpPeriod[1] = 2;
+        lockUpPeriod[2] = 4;
+        lockUpPeriod[4] = 8;
     }
 
     receive() external payable { }
@@ -51,6 +57,12 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     /// @notice Set-up for the contract to be upgradable in the future
 
     function initialize() external initializer {
+        // Set lock up period
+        lockUpPeriod[6] = 1;
+        lockUpPeriod[1] = 2;
+        lockUpPeriod[2] = 4;
+        lockUpPeriod[4] = 8;
+
         // Initialize inheritance chain
         __UUPSUpgradeable_init();
     }
@@ -204,23 +216,14 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
     }
 
     /// @notice Gets the rewards multiplier according to the lockUpPeriod
-    /// @param lockUpPeriod: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
-    /// @return rewardsMultiplier: the rewards multiplier according to the locking period
-    function _getRewardsMultiplier(uint256 lockUpPeriod) internal pure returns (uint256) {
-        uint256 rewardsMultiplier;
-        if (lockUpPeriod == 6) {
-            rewardsMultiplier = 1;
-        } else if (lockUpPeriod == 1) {
-            rewardsMultiplier = 2;
-        } else if (lockUpPeriod == 2) {
-            rewardsMultiplier = 4;
-        } else if (lockUpPeriod == 4) {
-            rewardsMultiplier = 8;
+    /// @param userLockUpPeriod_: lock up period chosen by the user that will determine the rewards multiplier - 6 = 6 months, 1 = 1 year, 2 = 2 years, 4 = 4 years
+    function _getRewardsMultiplier(uint256 userLockUpPeriod_) internal view returns (uint256 rewardsMultiplier_) {
+        if (lockUpPeriod[userLockUpPeriod_] != 0) {
+            rewardsMultiplier_ = lockUpPeriod[userLockUpPeriod_];
         } else {
             revert WrongLockUpPeriodError();
         }
-
-        return rewardsMultiplier;
+        return rewardsMultiplier_;
     }
 
     /// @notice inserts a new node into the linked list according to its properties (lockUpPeriod, shares, amount of deposited lp tokens)
@@ -328,7 +331,10 @@ contract Vault is Initializable, Ownable2Step, UUPSUpgradeable, LinkedList, IVau
         return prev;
     }
 
-    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_) internal virtual { }
+    function _updateDeposit(uint256 hint_, uint256 endTime_, uint256 shares_, uint256 amount_, uint256 timestamp_)
+        internal
+        virtual
+    { }
 
     function _updateDepositExpired(uint256 idToRemove) internal virtual { }
 }

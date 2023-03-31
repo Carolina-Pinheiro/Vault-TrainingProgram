@@ -92,36 +92,32 @@ contract VaultTest is Test {
     }
 
     function testRewardsMultiplier() external {
-        vm.startPrank(lucy);
-        uint256 balance = _userGetLPTokens(lucy);
-
-        //Approve and transfer tokens to the vault
-        _approveTokens(balance);
-
         // Test the 4 tiers
-        vault.deposit(1, 6);
-        vault.deposit(1, 1);
-        vault.deposit(1, 2);
-        vault.deposit(1, 4);
-        vm.stopPrank();
+        uint8[4] memory rewardsTiers = [6, 1, 2, 4]; // 6 months, 1 year, 2 years, 4 years
+        uint8[4] memory expectedRewardsMultiplier = [1, 2, 4, 8];
+        uint256 rewardsMultiplier;
+        ILinkedList.Node memory newNode_;
 
-        vm.startPrank(address(vault));
-        ILinkedList.Node memory node6Months = vault.getDeposit(vault.ownersDepositId(lucy, 0));
-        ILinkedList.Node memory node1Year = vault.getDeposit(vault.ownersDepositId(lucy, 1));
-        ILinkedList.Node memory node2Years = vault.getDeposit(vault.ownersDepositId(lucy, 2));
-        ILinkedList.Node memory node4Years = vault.getDeposit(vault.ownersDepositId(lucy, 3));
-        vm.stopPrank();
+        vm.startPrank(julien);
+        uint256 balance = _userGetLPTokens(julien);
 
-        assertEq(node6Months.share, 1); // 6 months
-        assertEq(node1Year.share, 2); // 1 year
-        assertEq(node2Years.share, 4); // 2 years
-        assertEq(node4Years.share, 8); // 4 years
+        //Approve  tokens to the vault
+        _approveTokens(balance);
+        vm.stopPrank();
+        for (uint256 i = 0; i < 4; i++) {
+            vm.startPrank(julien);
+            vault.deposit(1, rewardsTiers[i]);
+            vm.stopPrank();
+            vm.startPrank(address(vault));
+            newNode_ = vault.getDeposit(vault.ownersDepositId(julien, i));
+            vm.stopPrank();
+            assertEq(newNode_.share, expectedRewardsMultiplier[i]);
+        }
 
         //Test with an incorrect lock up period
-        vm.startPrank(lucy);
         vm.expectRevert(WrongLockUpPeriodError.selector);
+        vm.prank(julien);
         vault.deposit(1, 3);
-        vm.stopPrank();
     }
 
     function testUniswapSetup() external {
